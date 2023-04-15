@@ -21,11 +21,11 @@ thread_local! {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct FilterRequest {
-    items: WeaponMap,
     //family: Option<DestinyItemType>,
     familty: Option<DestinyItemSubType>,
     stats: Option<HashMap<BungieHash, StatSplit>>, //probably need to change this to a vec
     energy: Option<DamageType>,
+    slot: Option<Slot>,
     adept: Option<bool>,
     craftable: Option<bool>,
     name: Option<String>,
@@ -272,7 +272,34 @@ async fn filter_ammo(
     }
     Ok(found_weapons)
 }
-async fn filter_handler() {}
+async fn filter_handler(
+    items: WeaponMap,
+    search: FilterRequest,
+) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    let mut buffer = items.clone();
+    if let Some(query) = search.slot {
+        buffer = filter_slot(buffer, query).await?;
+    }
+    if let Some(query) = search.adept {
+        buffer = filter_adept(buffer, query).await?;
+    }
+    if let Some(query) = search.craftable {
+        buffer = filter_craftable(buffer, query).await?;
+    }
+    if let Some(query) = search.energy {
+        buffer = filter_energy(buffer, query).await?;
+    }
+    if let Some(query) = search.familty {
+        buffer = filter_weapon_type(buffer, query).await?;
+    }
+    if let Some(query) = search.stats {
+        buffer = filter_stats(buffer, query).await?;
+    }
+    if let Some(query) = search.name {
+        buffer = filter_names(buffer, query).await?;
+    }
+    Ok(buffer)
+}
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = rustgie::RustgieClientBuilder::new()
@@ -310,15 +337,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
     */
+    let request: FilterRequest = FilterRequest {
+        familty: Some(DestinyItemSubType::SubmachineGun),
+        stats: None,
+        energy: None,
+        slot: Some(Slot::Top),
+        adept: Some(true),
+        craftable: None,
+        source: None,
+        name: Some("Immor".to_string()),
+    };
     /*let found = filter_ammo(buffer, DestinyAmmunitionType::Primary).await?;
 
     let found = filter_stats(weapons, stats).await?;
     let found = filter_slot(found, Slot::Top).await?;*/
     //let weapons = filter_weapon_type(buffer, DestinyItemSubType::HandCannon).await?;
     //let found = filter_adept(weapons, true).await?;
-    let found = filter_names(buffer, "agnhild".to_string()).await?;
+    let found = filter_handler(buffer, request).await?;
     let end = start.elapsed();
     println!("{:?}", found);
+    println!("{}", found.len());
     println!("{:?}", end);
 
     //print!("{}", test);
