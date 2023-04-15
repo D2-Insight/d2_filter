@@ -1,40 +1,40 @@
 use num_enum::IntoPrimitive;
 use rustgie::types::destiny::{
-    definitions::DestinyInventoryItemDefinition,
-    historical_stats::definitions::DestinyStatsCategoryType, DestinyItemSubType, DestinyItemType,
+    definitions::DestinyInventoryItemDefinition, DestinyItemSubType, DestinyItemType,
 };
 use std::collections::HashMap;
 
 #[derive(IntoPrimitive)]
 #[repr(u32)]
 pub enum StatHashes {
-    ACCURACY = 1591432999,
-    AIM_ASSIST = 1345609583,
-    AIRBORNE = 2714457168,
-    AMMO_CAPACITY = 925767036,
-    ATTACK = 1480404414,
-    BLAST_RADIUS = 3614673599,
-    CHARGE_RATE = 3022301683,
-    CHARGE_TIME = 2961396640,
-    DRAW_TIME = 447667954,
-    GUARD_EFFICIENCY = 2762071195,
-    GUARD_ENDURANCE = 3736848092,
-    GUARD_RESISTANCE = 209426660,
-    HANDLING = 943549884,
-    IMPACT = 4043523819,
-    INVENTORY_SIZE = 1931675084,
-    MAGAZINE = 3871231066,
-    RANGE = 1240592695,
-    RECOIL_DIR = 2715839340,
-    RECOVERY = 1943323491,
-    RELOAD = 4188031367,
-    RPM = 4284893193,
-    SHIELD_DURATION = 1842278586,
-    SWING_SPEED = 2837207746,
-    VELOCITY = 2523465841,
-    ZOOM = 3555269338,
-    UNKNOWN = 0,
+    Accuracy = 1591432999,
+    AimAssist = 1345609583,
+    Airborne = 2714457168,
+    AmmoCapacity = 925767036,
+    Attack = 1480404414,
+    BlastRadius = 3614673599,
+    ChargeRate = 3022301683,
+    ChargeTime = 2961396640,
+    DrawTime = 447667954,
+    GuardEfficiency = 2762071195,
+    GuardEndurance = 3736848092,
+    GuardResistance = 209426660,
+    Handling = 943549884,
+    Impact = 4043523819,
+    InventorySize = 1931675084,
+    Magazine = 3871231066,
+    Range = 1240592695,
+    RecoilDir = 2715839340,
+    Recovery = 1943323491,
+    Reload = 4188031367,
+    Rpm = 4284893193,
+    ShieldDuration = 1842278586,
+    SwingSpeed = 2837207746,
+    Velocity = 2523465841,
+    Zoom = 3555269338,
+    Unkown = 0,
 }
+#[allow(dead_code)]
 #[derive(Clone)]
 enum StatSplit {
     Above(i32),
@@ -44,6 +44,33 @@ enum StatSplit {
     AtOrBelow(i32),
     AtOrBetween(i32, i32),
     At(i32),
+}
+
+fn preprocess_manifest(
+    item_type: DestinyItemType,
+    map: &std::collections::HashMap<u32, DestinyInventoryItemDefinition>,
+) -> std::collections::HashMap<u32, DestinyInventoryItemDefinition> {
+    let mut buffer: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+    for (hash, item) in map {
+        if item.item_type == item_type {
+            buffer.insert(hash.to_owned(), item.to_owned());
+        }
+    }
+    return buffer;
+}
+
+fn check_stats(stat_range: StatSplit, check_stat: i32) -> bool {
+    match stat_range {
+        StatSplit::Above(stat_above) => stat_above < check_stat,
+        StatSplit::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
+        StatSplit::Below(stat_below) => stat_below > check_stat,
+        StatSplit::AtOrAbove(stat_above) => stat_above <= check_stat,
+        StatSplit::AtOrBetween(stat_low, stat_high) => {
+            stat_high >= check_stat || stat_low <= check_stat
+        }
+        StatSplit::AtOrBelow(stat_below) => stat_below >= check_stat,
+        StatSplit::At(stat_at) => stat_at == check_stat,
+    }
 }
 
 fn find_weps(
@@ -63,7 +90,7 @@ fn find_weps(
         let item_stats = item.stats.unwrap().stats.unwrap();
         let mut condition = true;
         for (stat, stat_range) in stats.clone() {
-            let stat_option = &item_stats.get(&stat);
+            let stat_option = item_stats.get(&stat);
 
             let check_stat = match stat_option {
                 Some(stat) => stat.value,
@@ -73,19 +100,7 @@ fn find_weps(
                 }
             };
 
-            if !match stat_range {
-                StatSplit::Above(stat_above) => stat_above < check_stat,
-                StatSplit::Between(stat_low, stat_high) => {
-                    stat_high > check_stat || stat_low < check_stat
-                }
-                StatSplit::Below(stat_below) => stat_below > check_stat,
-                StatSplit::AtOrAbove(stat_above) => stat_above <= check_stat,
-                StatSplit::AtOrBetween(stat_low, stat_high) => {
-                    stat_high >= check_stat || stat_low <= check_stat
-                }
-                StatSplit::AtOrBelow(stat_below) => stat_below >= check_stat,
-                StatSplit::At(stat_at) => stat_at == check_stat,
-            } {
+            if !check_stats(stat_range, check_stat) {
                 condition = false;
                 break;
             }
@@ -117,17 +132,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?
             .json()
             .await?;
-    let mut buffer: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
 
-    for (hash, item) in manifestjson {
-        if item.item_type == DestinyItemType::Weapon {
-            buffer.insert(hash, item);
-        }
-    }
+    let buffer = preprocess_manifest(DestinyItemType::Weapon, &manifestjson);
 
     let mut stats: HashMap<u32, StatSplit> = HashMap::new();
     //stats.insert(StatHashes::RANGE.into(), StatSplit::Above(70));
-    stats.insert(StatHashes::RANGE.into(), StatSplit::Below(25));
+    stats.insert(StatHashes::Range.into(), StatSplit::Below(25));
 
     let start = std::time::Instant::now();
     let found = find_weps(buffer, stats, DestinyItemSubType::HandCannon).unwrap();
