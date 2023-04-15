@@ -8,16 +8,15 @@ use rustgie::types::destiny::{
     TierType,
 };
 use std::collections::HashMap;
-use std::{cell::RefCell, hash::Hash};
+use std::{cell::RefCell, collections::HashSet};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 type BungieHash = u32;
-type HashArray = Vec<u32>;
+type BungieHashSet = HashSet<BungieHash>;
 
 thread_local! {
     pub static WEAPONS: RefCell<WeaponMap> = RefCell::new(WeaponMap::new());
-    pub static ADEPT: RefCell<HashArray> = RefCell::new(HashArray::new());
-    pub static CRAFTABLE: RefCell<HashArray> = RefCell::new(HashArray::new());
+    pub static ADEPT: RefCell<BungieHashSet> = RefCell::new(BungieHashSet::new());
 }
 #[allow(dead_code)]
 #[derive(Default)]
@@ -201,6 +200,23 @@ async fn filter_adept(
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
 
     for (hash, item) in items {
+        ADEPT.with(|data| {
+            let buffer = match data.borrow().get(&hash) {
+                Some(_) => true,
+                None => false,
+            };
+            if buffer == search {
+                found_weapons.insert(hash, item);
+            }
+        })
+    }
+    Ok(found_weapons)
+}
+
+async fn whatever(items: WeaponMap, search: bool) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+
+    for (hash, item) in items {
         //do craftable thingy
     }
     Ok(found_weapons)
@@ -259,13 +275,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     ADEPT.with(|data| {
         data.borrow_mut().clear();
-        let mut buffer: HashArray = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
-        data.borrow_mut().append(&mut buffer)});
-
-    CRAFTABLE.with(|data| {
-        data.borrow_mut().clear();
-        let mut buffer: HashArray = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/craftable-hashes.json").unwrap().json().unwrap();
-        data.borrow_mut().append(&mut buffer)});
+        let buffer: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
+        data.borrow_mut().extend(buffer.iter())});
 
     let buffer = preprocess_manifest(DestinyItemType::Weapon, &manifestjson).await;
 
@@ -284,7 +295,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let found = filter_stats(weapons, stats).await?;
     let found = filter_slot(found, Slot::Top).await?;*/
     let weapons = filter_weapon_type(buffer, DestinyItemSubType::HandCannon).await?;
-    let found = filter_craftable(weapons, true).await?;
+    let found = filter_adept(weapons, true).await?;
     let end = start.elapsed();
     println!("{:?}", found);
     println!("{:?}", end);
