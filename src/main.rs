@@ -129,7 +129,27 @@ async fn filter_stats(
     Ok(found_weapons)
 }
 
-async fn filter_names() {}
+async fn filter_names(
+    items: WeaponMap,
+    search: String,
+) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+
+    for (hash, item) in items {
+        if item
+            .clone()
+            .display_properties
+            .unwrap()
+            .name
+            .unwrap()
+            .to_lowercase()
+            .contains(search.to_lowercase().as_str())
+        {
+            found_weapons.insert(hash, item);
+        }
+    }
+    Ok(found_weapons)
+}
 
 async fn filter_perks() {}
 
@@ -294,8 +314,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let found = filter_stats(weapons, stats).await?;
     let found = filter_slot(found, Slot::Top).await?;*/
-    let weapons = filter_weapon_type(buffer, DestinyItemSubType::HandCannon).await?;
-    let found = filter_adept(weapons, true).await?;
+    //let weapons = filter_weapon_type(buffer, DestinyItemSubType::HandCannon).await?;
+    //let found = filter_adept(weapons, true).await?;
+    let found = filter_names(buffer, "agnhild".to_string()).await?;
     let end = start.elapsed();
     println!("{:?}", found);
     println!("{:?}", end);
