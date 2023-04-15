@@ -8,10 +8,17 @@ use rustgie::types::destiny::{
     TierType,
 };
 use std::collections::HashMap;
+use std::{cell::RefCell, hash::Hash};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 type BungieHash = u32;
+type HashArray = Vec<u32>;
 
+thread_local! {
+    pub static WEAPONS: RefCell<WeaponMap> = RefCell::new(WeaponMap::new());
+    pub static ADEPT: RefCell<HashArray> = RefCell::new(HashArray::new());
+    pub static CRAFTABLE: RefCell<HashArray> = RefCell::new(HashArray::new());
+}
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct FilterRequest {
@@ -78,7 +85,7 @@ enum Slot {
     Bottom = 953998645,
 }
 
-fn preprocess_manifest(item_type: DestinyItemType, map: &WeaponMap) -> WeaponMap {
+async fn preprocess_manifest(item_type: DestinyItemType, map: &WeaponMap) -> WeaponMap {
     let mut buffer: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in map {
         if item.item_type == item_type {
@@ -148,7 +155,13 @@ async fn filter_craftable(
 ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in items {
-        //do craftable thingy
+        let buffer = match item.clone().inventory.unwrap().recipe_item_hash {
+            Some(_) => true,
+            None => false,
+        };
+        if buffer == search {
+            found_weapons.insert(hash, item);
+        }
     }
     Ok(found_weapons)
 }
@@ -181,7 +194,17 @@ async fn filter_rarity(
     Ok(found_weapons)
 }
 
-async fn filter_adept() {}
+async fn filter_adept(
+    items: WeaponMap,
+    search: bool,
+) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+
+    for (hash, item) in items {
+        //do craftable thingy
+    }
+    Ok(found_weapons)
+}
 
 async fn filter_slot(
     items: WeaponMap,
@@ -234,7 +257,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .json()
         .await?;
 
-    let buffer = preprocess_manifest(DestinyItemType::Weapon, &manifestjson);
+    ADEPT.with(|data| {
+        data.borrow_mut().clear();
+        let mut buffer: HashArray = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
+        data.borrow_mut().append(&mut buffer)});
+
+    CRAFTABLE.with(|data| {
+        data.borrow_mut().clear();
+        let mut buffer: HashArray = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/craftable-hashes.json").unwrap().json().unwrap();
+        data.borrow_mut().append(&mut buffer)});
+
+    let buffer = preprocess_manifest(DestinyItemType::Weapon, &manifestjson).await;
 
     let mut stats: HashMap<u32, StatSplit> = HashMap::new();
     stats.insert(StatHashes::Reload.into(), StatSplit::At(55));
@@ -246,10 +279,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
     */
-    let found = filter_ammo(buffer, DestinyAmmunitionType::Primary).await?;
-    let weapons = filter_weapon_type(found, DestinyItemSubType::HandCannon).await?;
+    /*let found = filter_ammo(buffer, DestinyAmmunitionType::Primary).await?;
+
     let found = filter_stats(weapons, stats).await?;
-    let found = filter_slot(found, Slot::Top).await?;
+    let found = filter_slot(found, Slot::Top).await?;*/
+    let weapons = filter_weapon_type(buffer, DestinyItemSubType::HandCannon).await?;
+    let found = filter_craftable(weapons, true).await?;
     let end = start.elapsed();
     println!("{:?}", found);
     println!("{:?}", end);

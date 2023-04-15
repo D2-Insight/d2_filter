@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.24"
 num_enum = "0.6.0"
-reqwest = "0.11.16"
+reqwest = { version = "0.11.16", features = ["blocking"] }
 rustgie = { git = "https://github.com/BarmonHammer/rustgie.git", rev = "6b8c748" }
 serde = { version = "1.0.160", features = ["derive"] }
 tokio = { version = "1.27.0", features = ["full"] }
