@@ -3,18 +3,16 @@ use rustgie::types::destiny::{
     definitions::DestinyInventoryItemDefinition, DamageType, DestinyAmmunitionType,
     DestinyItemSubType, DestinyItemType, TierType,
 };
-use std::{cell::RefCell, collections::{HashSet, HashMap}};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 type BungieHash = u32;
 type BungieHashSet = HashSet<BungieHash>;
 /// K: PerkHash V: Guns that use it
 type PerkMap = HashMap<BungieHash, HashSet<BungieHash>>;
-
-thread_local! {
-    pub static WEAPONS: RefCell<WeaponMap> = RefCell::new(WeaponMap::new());
-    pub static ADEPT: RefCell<BungieHashSet> = RefCell::new(BungieHashSet::new());
-}
 
 pub struct Filter {
     weapons: WeaponMap,
