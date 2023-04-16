@@ -22,7 +22,7 @@ pub enum PerkSlot {
     Magazine = 1,
     Left = 2,
     Right = 3,
-    Orgin = 4,
+    Origin = 4,
     #[num_enum(default)]
     Unknown = 5,
 }
@@ -525,7 +525,7 @@ mod tests {
     #[tokio::test]
     async fn test_rose() {
         let weapon_filter = crate::Filter::new().await;
-        let test = weapon_filter.perks.get(&3993415705).unwrap();
+        let test = weapon_filter.perks.get(&3193598749).unwrap();
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
         println!("{:?}", test)
     }
