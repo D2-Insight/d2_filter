@@ -3,10 +3,7 @@ use rustgie::types::destiny::{
     definitions::DestinyInventoryItemDefinition, DamageType, DestinyAmmunitionType,
     DestinyItemSubType, DestinyItemType, TierType,
 };
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 type BungieHash = u32;
@@ -23,9 +20,10 @@ pub struct Filter {
 pub enum Source {}
 
 impl Filter {
-    pub async fn new(apikey: &str) -> Self {
+    //This is the slowest part, but mostly because networking + bungie, everything else is fast af
+    pub async fn new() -> Self {
         let client = rustgie::RustgieClientBuilder::new()
-            .with_api_key(apikey)
+            .with_api_key("")
             .build()
             .unwrap();
         let manifest_response = client.destiny2_get_destiny_manifest(None).await.unwrap();
@@ -48,6 +46,7 @@ impl Filter {
 
         let weapons = preprocess_manifest(DestinyItemType::Weapon, &manifest).await;
         let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
+
         Filter {
             weapons: weapons,
             adept: adept,
@@ -195,8 +194,8 @@ async fn filter_names(
 
     for (hash, item) in items {
         if item
-            .clone()
             .display_properties
+            .clone()
             .unwrap()
             .name
             .unwrap()
@@ -232,11 +231,7 @@ async fn filter_craftable(
 ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in items {
-        let buffer = match item.clone().inventory.unwrap().recipe_item_hash {
-            Some(_) => true,
-            None => false,
-        };
-        if buffer == search {
+        if item.inventory.clone().unwrap().recipe_item_hash.is_some() == search {
             found_weapons.insert(hash, item);
         }
     }
@@ -251,7 +246,7 @@ async fn filter_energy(
 ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in items {
-        if item.clone().default_damage_type == search {
+        if item.default_damage_type.clone() == search {
             found_weapons.insert(hash, item);
         }
     }
@@ -264,7 +259,7 @@ async fn filter_rarity(
 ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in items {
-        if item.clone().inventory.unwrap().tier_type == search {
+        if item.inventory.clone().unwrap().tier_type == search {
             found_weapons.insert(hash, item);
         }
     }
@@ -279,12 +274,7 @@ async fn filter_adept(
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
 
     for (hash, item) in items {
-        let buffer = match adept.get(&hash) {
-            Some(_) => true,
-            None => false,
-        };
-
-        if buffer == search {
+        if adept.get(&hash).is_some() == search {
             found_weapons.insert(hash, item);
         }
     }
@@ -315,7 +305,7 @@ async fn filter_ammo(
 ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
     let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
     for (hash, item) in items {
-        if item.clone().equipping_block.unwrap().ammo_type == search {
+        if item.equipping_block.clone().unwrap().ammo_type == search {
             found_weapons.insert(hash, item);
         }
     }
@@ -333,14 +323,17 @@ impl Filter {
         if let Some(query) = search.slot {
             buffer = filter_slot(buffer, query).await?;
         }
+        if let Some(query) = search.energy {
+            buffer = filter_energy(buffer, query).await?;
+        }
+        if let Some(query) = search.rarity {
+            buffer = filter_rarity(buffer, query).await?;
+        }
         if let Some(query) = search.adept {
             buffer = filter_adept(buffer, query, self.adept.clone()).await?;
         }
         if let Some(query) = search.craftable {
             buffer = filter_craftable(buffer, query).await?;
-        }
-        if let Some(query) = search.energy {
-            buffer = filter_energy(buffer, query).await?;
         }
         if let Some(query) = search.stats {
             buffer = filter_stats(buffer, query).await?;
@@ -348,9 +341,32 @@ impl Filter {
         if let Some(query) = search.name {
             buffer = filter_names(buffer, query).await?;
         }
-        if let Some(query) = search.rarity {
-            buffer = filter_rarity(buffer, query).await?;
-        }
+
         Ok(buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use rustgie::types::destiny::definitions::DestinyInventoryItemDefinition;
+
+    use crate::FilterRequest;
+
+    #[tokio::test]
+    async fn test() {
+        let weapon_filter = crate::Filter::new().await;
+        let mut filter_params = FilterRequest::new();
+        filter_params.adept = Some(true);
+        filter_params.family = Some(rustgie::types::destiny::DestinyItemSubType::SubmachineGun);
+        filter_params.slot = Some(crate::WeaponSlot::Top);
+        filter_params.energy = Some(rustgie::types::destiny::DamageType::Strand);
+        let start = std::time::Instant::now();
+        let result = weapon_filter.filter_for(filter_params).await.unwrap();
+        let duration = start.elapsed();
+        println!("{}", duration.as_millis());
+        assert_eq!(result.get(&3193598749).is_some(), true);
+        assert_eq!(result.len(), 1);
     }
 }
