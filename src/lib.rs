@@ -64,8 +64,8 @@ pub struct FilterRequest {
     adept: Option<bool>,
     craftable: Option<bool>,
     name: Option<String>,
-    source: Option<Source>,
     rarity: Option<TierType>,
+    ammo: Option<DestinyAmmunitionType>,
 }
 impl FilterRequest {
     pub fn new() -> Self {
@@ -77,8 +77,8 @@ impl FilterRequest {
             adept: None,
             craftable: None,
             name: None,
-            source: None,
             rarity: None,
+            ammo: None,
         }
     }
 }
@@ -210,7 +210,18 @@ async fn filter_names(
 
 async fn filter_perks() {}
 
-async fn filter_source() {}
+/*async fn filter_source(
+    items: WeaponMap,
+    search: BungieHash,
+) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+    for (hash, item) in items {
+        if item.inventory == search {
+            found_weapons.insert(hash, item);
+        }
+    }
+    Ok(found_weapons)
+}*/
 
 async fn filter_weapon_type(
     items: WeaponMap,
@@ -320,6 +331,9 @@ impl Filter {
         if let Some(query) = search.family {
             buffer = filter_weapon_type(buffer, query).await?;
         }
+        if let Some(query) = search.ammo {
+            buffer = filter_ammo(buffer, query).await?;
+        }
         if let Some(query) = search.slot {
             buffer = filter_slot(buffer, query).await?;
         }
@@ -350,7 +364,7 @@ impl Filter {
 mod tests {
     use std::collections::HashMap;
 
-    use rustgie::types::destiny::definitions::DestinyInventoryItemDefinition;
+    use rustgie::types::destiny::*;
 
     use crate::FilterRequest;
 
@@ -359,9 +373,9 @@ mod tests {
         let weapon_filter = crate::Filter::new().await;
         let mut filter_params = FilterRequest::new();
         filter_params.adept = Some(true);
-        filter_params.family = Some(rustgie::types::destiny::DestinyItemSubType::SubmachineGun);
+        filter_params.family = Some(DestinyItemSubType::SubmachineGun);
         filter_params.slot = Some(crate::WeaponSlot::Top);
-        filter_params.energy = Some(rustgie::types::destiny::DamageType::Strand);
+        filter_params.energy = Some(DamageType::Strand);
         let start = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params).await.unwrap();
         let duration = start.elapsed();
