@@ -156,16 +156,16 @@ impl Filter {
 #[allow(dead_code)]
 pub struct FilterRequest {
     //family: Option<DestinyItemType>,
-    family: Option<DestinyItemSubType>,
-    stats: Option<HashMap<BungieHash, StatSplit>>, //probably need to change this to a vec
-    energy: Option<DamageType>,
-    slot: Option<WeaponSlot>,
-    adept: Option<bool>,
-    craftable: Option<bool>,
-    name: Option<String>,
-    rarity: Option<TierType>,
-    ammo: Option<DestinyAmmunitionType>,
-    perks: Option<PerkMap>,
+    pub family: Option<DestinyItemSubType>,
+    pub stats: Option<HashMap<BungieHash, StatSplit>>, //probably need to change this to a vec
+    pub energy: Option<DamageType>,
+    pub slot: Option<WeaponSlot>,
+    pub adept: Option<bool>,
+    pub craftable: Option<bool>,
+    pub name: Option<String>,
+    pub rarity: Option<TierType>,
+    pub ammo: Option<DestinyAmmunitionType>,
+    pub perks: Option<PerkMap>,
 }
 impl FilterRequest {
     pub fn new() -> Self {
@@ -220,7 +220,7 @@ pub enum StatHashes {
 
 #[allow(dead_code)]
 #[derive(Clone)]
-enum StatSplit {
+pub enum StatSplit {
     Above(i32),
     Between(i32, i32),
     Below(i32),
