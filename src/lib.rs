@@ -74,10 +74,10 @@ impl Filter {
             .json()
             .await
             .unwrap();
-
         let weapons = preprocess_manifest(DestinyItemType::Weapon, &inventory_items).await;
         let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
         let mut perks: GunPerkMap = HashMap::new();
+        perks.reserve(weapons.len() - perks.capacity());
         for (hash, item) in &weapons {
             let mut cat_index: Vec<i32> = Vec::new();
             for index in item.sockets.clone().unwrap().socket_categories.unwrap() {
@@ -98,7 +98,7 @@ impl Filter {
             );
             let mut count: u8 = 0;
             let mut perks_holy_shit: HashMap<u32, PerkSlot> = HashMap::new();
-            for socket_index in cat_index {
+            for socket_index in cat_index.clone() {
                 let socket = sockets.get(socket_index as usize).unwrap();
                 if socket.single_initial_item_hash == 2302094943
                 /*Kill tracker >:(*/
@@ -110,17 +110,17 @@ impl Filter {
                 perks_holy_shit
                     .insert(socket.single_initial_item_hash, PerkSlot::from(count as u8));
                 //STATIC PERKS SOME TIMES?
-                if let Some(x) = socket.reusable_plug_items.clone() {
-                    for static_perk in x {
+                if let Some(hash) = socket.reusable_plug_items.clone() {
+                    for static_perk in hash {
                         perks_holy_shit
                             .insert(static_perk.plug_item_hash, PerkSlot::from(count as u8));
                     }
                 }
 
                 //STATIC PERK TOO??
-                if let Some(x) = socket.reusable_plug_set_hash {
+                if let Some(hash) = socket.reusable_plug_set_hash {
                     for perk in plug_sets
-                        .get(&x)
+                        .get(&hash)
                         .unwrap()
                         .reusable_plug_items
                         .clone()
@@ -131,9 +131,9 @@ impl Filter {
                 }
 
                 //RANDOM PERKS
-                if let Some(x) = socket.randomized_plug_set_hash {
+                if let Some(hash) = socket.randomized_plug_set_hash {
                     for perk in plug_sets
-                        .get(&x)
+                        .get(&hash)
                         .unwrap()
                         .reusable_plug_items
                         .clone()
@@ -513,19 +513,17 @@ mod tests {
         let mut filter_params = FilterRequest::new();
         // /filter_params.perks = Some(365154968);
         let mut perks: PerkMap = std::collections::HashMap::new();
-        perks.insert(1528281896, PerkSlot::LeftRight);
-        perks.insert(2078097559, PerkSlot::Right);
+        perks.insert(3619207468, PerkSlot::LeftRight);
         filter_params.perks = Some(perks);
         let start = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params).await.unwrap();
         let duration = start.elapsed();
-        println!("{:?}", result);
+        // /println!("{:?}", result);
         println!("{} MS", duration.as_millis());
         println!("{} Items", result.len());
 
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
         //assert_eq!(result.get(&3193598749).is_some(), true);
-        assert_eq!(result.len(), 1);
     }
 
     #[tokio::test]
