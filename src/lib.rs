@@ -6,6 +6,7 @@ use rustgie::types::destiny::{
 use std::collections::{HashMap, HashSet};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
+type WeaponArray = Vec<DestinyInventoryItemDefinition>;
 type BungieHash = u32;
 type BungieHashSet = HashSet<BungieHash>;
 type PlugMap = HashMap<u32, DestinyPlugSetDefinition>;
@@ -25,7 +26,7 @@ pub enum PerkSlot {
     LeftRight,
 }
 pub struct Filter {
-    weapons: WeaponMap,
+    weapons: WeaponArray,
     adept: BungieHashSet,
     perks: GunPerkMap,
 }
@@ -75,10 +76,12 @@ impl Filter {
             .await
             .unwrap();
         let weapons = preprocess_manifest(DestinyItemType::Weapon, &inventory_items).await;
+        let weapons: Vec<DestinyInventoryItemDefinition> = Vec::from_iter(weapons.values().cloned());
         let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
         let mut perks: GunPerkMap = HashMap::new();
         perks.reserve(weapons.len() - perks.capacity());
-        for (hash, item) in &weapons {
+        for item in &weapons {
+            let hash = item.hash;
             let mut cat_index: Vec<i32> = Vec::new();
             for index in item.sockets.clone().unwrap().socket_categories.unwrap() {
                 if index.socket_category_hash == 4241085061
@@ -267,11 +270,11 @@ fn check_stats(stat_range: StatSplit, check_stat: i32) -> bool {
 }
 
 async fn filter_stats(
-    items: WeaponMap,
+    items: WeaponArray,
     stats: std::collections::HashMap<u32, StatSplit>,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    '_weapons: for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    '_weapons: for item in items {
         let item_stats = item.clone().stats.unwrap().stats.unwrap();
         for (stat, stat_range) in stats.clone() {
             let stat_option = item_stats.get(&stat);
@@ -282,18 +285,17 @@ async fn filter_stats(
                 continue '_weapons;
             }
         }
-        found_weapons.insert(hash, item);
+        found_weapons.push(item);
     }
     Ok(found_weapons)
 }
 
 async fn filter_names(
-    items: WeaponMap,
+    items: WeaponArray,
     search: String,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item
             .display_properties
             .clone()
@@ -303,7 +305,7 @@ async fn filter_names(
             .to_lowercase()
             .contains(search.to_lowercase().as_str())
         {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
@@ -311,18 +313,19 @@ async fn filter_names(
 
 pub async fn filter_perks(
     perks: GunPerkMap,
-    items: WeaponMap,
+    items: WeaponArray,
     search: PerkMap,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
+        let hash = &item.hash;
         for (perk_hash, slot) in &search {
-            if let Some(actual_slot) = perks.get(&hash).unwrap().get(&perk_hash) {
+            if let Some(actual_slot) = perks.get(hash).unwrap().get(&perk_hash) {
                 if slot == actual_slot
                     || (slot == &PerkSlot::LeftRight
                         && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
                 {
-                    found_weapons.insert(hash, item.clone());
+                    found_weapons.push(item.clone());
                 }
             }
         }
@@ -344,26 +347,26 @@ pub async fn filter_perks(
 }*/
 
 async fn filter_weapon_type(
-    items: WeaponMap,
+    items: WeaponArray,
     search: DestinyItemSubType,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item.item_sub_type == search {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
 }
 
 async fn filter_craftable(
-    items: WeaponMap,
+    items: WeaponArray,
     search: bool,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item.inventory.clone().unwrap().recipe_item_hash.is_some() == search {
-            found_weapons.insert(hash, item);
+            found_weapons.push( item);
         }
     }
     Ok(found_weapons)
@@ -372,72 +375,72 @@ async fn filter_craftable(
 async fn filter_frame() {}
 
 async fn filter_energy(
-    items: WeaponMap,
+    items: WeaponArray,
     search: DamageType,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item.default_damage_type.clone() == search {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
 }
 
 async fn filter_rarity(
-    items: WeaponMap,
+    items: WeaponArray,
     search: TierType,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item.inventory.clone().unwrap().tier_type == search {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
 }
 
 async fn filter_adept(
-    items: WeaponMap,
+    items: WeaponArray,
     search: bool,
     adept: BungieHashSet,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
 
-    for (hash, item) in items {
-        if adept.get(&hash).is_some() == search {
-            found_weapons.insert(hash, item);
+    for item in items {
+        if adept.get(&item.hash).is_some() == search {
+            found_weapons.push(item);
         }
     }
     return Ok(found_weapons);
 }
 
 async fn filter_slot(
-    items: WeaponMap,
+    items: WeaponArray,
     search: WeaponSlot,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         let weapon_slot = item
             .clone()
             .equipping_block
             .unwrap()
             .equipment_slot_type_hash;
         if weapon_slot == search.to_owned() as u32 {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
 }
 
 async fn filter_ammo(
-    items: WeaponMap,
+    items: WeaponArray,
     search: DestinyAmmunitionType,
-) -> Result<WeaponMap, Box<dyn std::error::Error>> {
-    let mut found_weapons: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in items {
+) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+    let mut found_weapons: WeaponArray = Vec::new();
+    for item in items {
         if item.equipping_block.clone().unwrap().ammo_type == search {
-            found_weapons.insert(hash, item);
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
@@ -446,7 +449,7 @@ impl Filter {
     pub async fn filter_for(
         &self,
         search: FilterRequest,
-    ) -> Result<WeaponMap, Box<dyn std::error::Error>> {
+    ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
         let mut buffer = self.weapons.clone();
         if let Some(query) = search.family {
             buffer = filter_weapon_type(buffer, query).await?;
@@ -503,7 +506,6 @@ mod tests {
         let duration = start.elapsed();
         println!("{}", duration.as_millis());
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
-        assert_eq!(result.get(&3193598749).is_some(), true);
         assert_eq!(result.len(), 1);
     }
 
