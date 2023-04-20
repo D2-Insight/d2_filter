@@ -1,4 +1,5 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
+use reqwest::header::RETRY_AFTER;
 use rustgie::types::{
     api_response_::BungieApiResponse,
     destiny::{
@@ -294,6 +295,23 @@ async fn filter_stats(
     Ok(found_weapons)
 }
 
+fn filter_stats_new(
+    item: &DestinyInventoryItemDefinition,
+    stats: &std::collections::HashMap<u32, StatSplit>,
+) -> bool {
+    let item_stats = item.stats.as_ref().unwrap().stats.as_ref().unwrap();
+    for (stat, stat_range) in stats {
+        if let Some(stat_option) = item_stats.get(&stat) {
+            if !check_stats(stat_range, &stat_option.value) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
 async fn filter_names(
     items: WeaponArray,
     search: String,
@@ -314,6 +332,17 @@ async fn filter_names(
         }
     }
     Ok(found_weapons)
+}
+
+fn filter_names_new(item: &DestinyInventoryItemDefinition, search: &str) -> bool {
+    item.display_properties
+        .as_ref()
+        .unwrap()
+        .name
+        .as_ref()
+        .unwrap()
+        .to_lowercase()
+        .contains(search.to_lowercase().as_str())
 }
 
 pub async fn filter_perks(
@@ -342,6 +371,25 @@ pub async fn filter_perks(
     Ok(found_weapons)
 }
 
+fn filter_perks_new(
+    perks: &GunPerkMap,
+    item: &DestinyInventoryItemDefinition,
+    search: &PerkMap,
+) -> bool {
+    let hash = &item.hash;
+
+    for (perk_hash, slot) in search {
+        if let Some(actual_slot) = perks.get(hash).unwrap().get(&perk_hash) {
+            if slot != actual_slot
+                && !(slot == &PerkSlot::LeftRight
+                    && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
 /*async fn filter_source(
     items: WeaponMap,
     search: BungieHash,
@@ -368,6 +416,13 @@ async fn filter_weapon_type(
     Ok(found_weapons)
 }
 
+fn filter_weapon_type_new(
+    item: &DestinyInventoryItemDefinition,
+    search: DestinyItemSubType,
+) -> bool {
+    item.item_sub_type == search
+}
+
 async fn filter_craftable(
     items: WeaponArray,
     search: bool,
@@ -379,6 +434,10 @@ async fn filter_craftable(
         }
     }
     Ok(found_weapons)
+}
+
+fn filter_craftable_new(item: &DestinyInventoryItemDefinition, search: bool) -> bool {
+    item.inventory.as_ref().unwrap().recipe_item_hash.is_some() == search
 }
 
 async fn filter_frame() {}
@@ -396,6 +455,10 @@ async fn filter_energy(
     Ok(found_weapons)
 }
 
+fn filter_energy_new(item: &DestinyInventoryItemDefinition, search: DamageType) -> bool {
+    item.default_damage_type == search
+}
+
 async fn filter_rarity(
     items: WeaponArray,
     search: TierType,
@@ -407,6 +470,10 @@ async fn filter_rarity(
         }
     }
     Ok(found_weapons)
+}
+
+fn filter_rarity_new(item: &DestinyInventoryItemDefinition, search: TierType) -> bool {
+    item.inventory.as_ref().unwrap().tier_type == search
 }
 
 async fn filter_adept(
@@ -422,6 +489,14 @@ async fn filter_adept(
         }
     }
     return Ok(found_weapons);
+}
+
+fn filter_adept_new(
+    item: &DestinyInventoryItemDefinition,
+    search: bool,
+    adept: &BungieHashSet,
+) -> bool {
+    adept.get(&item.hash).is_some() == search
 }
 
 async fn filter_slot(
@@ -442,6 +517,14 @@ async fn filter_slot(
     Ok(found_weapons)
 }
 
+fn filter_slot_new(item: &DestinyInventoryItemDefinition, search: u32) -> bool {
+    item.equipping_block
+        .as_ref()
+        .unwrap()
+        .equipment_slot_type_hash
+        == search
+}
+
 async fn filter_ammo(items: WeaponArray, search: DestinyAmmunitionType) -> WeaponArray {
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
@@ -453,11 +536,7 @@ async fn filter_ammo(items: WeaponArray, search: DestinyAmmunitionType) -> Weapo
 }
 
 fn filter_ammo_new(item: &DestinyInventoryItemDefinition, search: DestinyAmmunitionType) -> bool {
-    if item.equipping_block.as_ref().unwrap().ammo_type == search {
-        true
-    } else {
-        false
-    }
+    item.equipping_block.as_ref().unwrap().ammo_type == search
 }
 
 impl Filter {
@@ -466,36 +545,46 @@ impl Filter {
         search: FilterRequest,
     ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
         let mut buffer = self.weapons.clone();
-        if let Some(query) = search.family {
-            buffer = filter_weapon_type(buffer, query).await?;
-        }
-        if let Some(query) = search.perks {
-            buffer = filter_perks(self.perks.clone(), buffer, query).await?;
-        }
         if let Some(query) = search.ammo {
             //buffer = filter_ammo(buffer, query).await;
-            buffer.retain(|x| filter_ammo_new(x, query))
+            buffer.retain(|item| filter_ammo_new(item, query))
+        }
+        if let Some(query) = search.family {
+            //buffer = filter_weapon_type(buffer, query).await?;
+            buffer.retain(|item| filter_weapon_type_new(item, query))
+        }
+        if let Some(query) = search.perks {
+            //buffer = filter_perks(self.perks.clone(), buffer, query).await?;
+            buffer.retain(|item| filter_perks_new(&self.perks, item, &query));
         }
         if let Some(query) = search.slot {
-            buffer = filter_slot(buffer, query).await?;
+            //buffer = filter_slot(buffer, query).await?;
+            let query = query as u32;
+            buffer.retain(|item| filter_slot_new(item, query))
         }
         if let Some(query) = search.energy {
-            buffer = filter_energy(buffer, query).await?;
+            //buffer = filter_energy(buffer, query).await?;
+            buffer.retain(|item| filter_energy_new(item, query));
         }
         if let Some(query) = search.rarity {
-            buffer = filter_rarity(buffer, query).await?;
+            //buffer = filter_rarity(buffer, query).await?;
+            buffer.retain(|item| filter_rarity_new(item, query));
         }
         if let Some(query) = search.adept {
-            buffer = filter_adept(buffer, query, self.adept.clone()).await?;
+            //buffer = filter_adept(buffer, query, self.adept.clone()).await?;
+            buffer.retain(|item| filter_adept_new(item, query, &self.adept));
         }
         if let Some(query) = search.craftable {
-            buffer = filter_craftable(buffer, query).await?;
+            //buffer = filter_craftable(buffer, query).await?;
+            buffer.retain(|item| filter_craftable_new(item, query));
         }
         if let Some(query) = search.stats {
-            buffer = filter_stats(buffer, query).await?;
+            //buffer = filter_stats(buffer, query).await?;
+            buffer.retain(|item| filter_stats_new(item, &query));
         }
         if let Some(query) = search.name {
-            buffer = filter_names(buffer, query).await?;
+            //buffer = filter_names(buffer, query).await?;
+            buffer.retain(|item| filter_names_new(item, query.as_str()));
         }
 
         Ok(buffer)
@@ -537,6 +626,7 @@ mod tests {
         let mut stats: HashMap<BungieHash, StatSplit> = HashMap::new();
         filter_params.family = Some(DestinyItemSubType::RocketLauncher);
         stats.insert(StatHashes::Velocity.into(), StatSplit::Below(35));
+        filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params).await.unwrap();
