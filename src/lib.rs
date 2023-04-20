@@ -1,9 +1,16 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
-use rustgie::types::destiny::{
-    definitions::{sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition},
-    DamageType, DestinyAmmunitionType, DestinyItemSubType, DestinyItemType, TierType,
+use rustgie::types::{
+    api_response_::BungieApiResponse,
+    destiny::{
+        config::DestinyManifest,
+        definitions::{sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition},
+        DamageType, DestinyAmmunitionType, DestinyItemSubType, DestinyItemType, TierType,
+    },
 };
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 type WeaponArray = Vec<DestinyInventoryItemDefinition>;
@@ -36,30 +43,31 @@ pub enum Source {}
 impl Filter {
     //This is the slowest part, but mostly because networking + bungie, everything else is fast af
     pub async fn new() -> Self {
-        let client = rustgie::RustgieClientBuilder::new()
-            .with_api_key("")
-            .build()
-            .unwrap();
-        let manifest_response = client.destiny2_get_destiny_manifest(None).await.unwrap();
+        let test: BungieApiResponse<DestinyManifest> =
+            reqwest::get("https://www.bungie.net/Platform/Destiny2/Manifest/")
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+        let manifest_response = test.response.unwrap();
         let weapon_path = manifest_response
             .json_world_component_content_paths
-            .clone()
+            .as_ref()
             .unwrap()
             .get("en")
             .unwrap()
             .get("DestinyInventoryItemDefinition")
-            .unwrap()
-            .to_owned();
+            .unwrap();
 
         let perk_path = manifest_response
             .json_world_component_content_paths
-            .clone()
+            .as_ref()
             .unwrap()
             .get("en")
             .unwrap()
             .get("DestinyPlugSetDefinition")
-            .unwrap()
-            .to_owned();
+            .unwrap();
 
         let inventory_items: WeaponMap =
             reqwest::get(format!("https://www.bungie.net{weapon_path}"))
@@ -75,34 +83,30 @@ impl Filter {
             .json()
             .await
             .unwrap();
-        let weapons = preprocess_manifest(DestinyItemType::Weapon, &inventory_items).await;
-        let weapons: Vec<DestinyInventoryItemDefinition> = Vec::from_iter(weapons.values().cloned());
+
+        let weapon_manifest = preprocess_manifest(DestinyItemType::Weapon, &inventory_items).await;
+        let weapons: Vec<DestinyInventoryItemDefinition> =
+            Vec::from_iter(weapon_manifest.values().cloned());
         let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
         let mut perks: GunPerkMap = HashMap::new();
         perks.reserve(weapons.len() - perks.capacity());
         for item in &weapons {
             let hash = item.hash;
+            let mut count: u8 = 0;
             let mut cat_index: Vec<i32> = Vec::new();
-            for index in item.sockets.clone().unwrap().socket_categories.unwrap() {
+            let sockets = item.sockets.as_ref().unwrap();
+            for index in sockets.socket_categories.as_ref().unwrap() {
                 if index.socket_category_hash == 4241085061
                 /*Weapon Perks*/
                 {
-                    cat_index = Vec::from(index.socket_indexes.unwrap());
+                    cat_index = Vec::from(index.socket_indexes.as_deref().unwrap());
                     break;
                 }
             }
-            let sockets = Vec::from(
-                item.sockets
-                    .clone()
-                    .unwrap()
-                    .socket_entries
-                    .to_owned()
-                    .unwrap(),
-            );
-            let mut count: u8 = 0;
+            let socket_entries = Vec::from(sockets.socket_entries.as_deref().unwrap());
             let mut perks_holy_shit: HashMap<u32, PerkSlot> = HashMap::new();
-            for socket_index in cat_index.clone() {
-                let socket = sockets.get(socket_index as usize).unwrap();
+            for socket_index in &cat_index {
+                let socket = socket_entries.get(*socket_index as usize).unwrap();
                 if socket.single_initial_item_hash == 2302094943
                 /*Kill tracker >:(*/
                 {
@@ -113,7 +117,7 @@ impl Filter {
                 perks_holy_shit
                     .insert(socket.single_initial_item_hash, PerkSlot::from(count as u8));
                 //STATIC PERKS SOME TIMES?
-                if let Some(hash) = socket.reusable_plug_items.clone() {
+                if let Some(hash) = &socket.reusable_plug_items {
                     for static_perk in hash {
                         perks_holy_shit
                             .insert(static_perk.plug_item_hash, PerkSlot::from(count as u8));
@@ -126,7 +130,7 @@ impl Filter {
                         .get(&hash)
                         .unwrap()
                         .reusable_plug_items
-                        .clone()
+                        .as_ref()
                         .unwrap()
                     {
                         perks_holy_shit.insert(perk.plug_item_hash, PerkSlot::from(count as u8));
@@ -139,7 +143,7 @@ impl Filter {
                         .get(&hash)
                         .unwrap()
                         .reusable_plug_items
-                        .clone()
+                        .as_ref()
                         .unwrap()
                     {
                         perks_holy_shit.insert(perk.plug_item_hash, PerkSlot::from(count as u8));
@@ -147,7 +151,7 @@ impl Filter {
                 }
                 count += 1;
             }
-            perks.insert(hash.clone(), perks_holy_shit);
+            perks.insert(hash, perks_holy_shit);
         }
         Filter {
             weapons: weapons,
@@ -254,7 +258,7 @@ async fn preprocess_manifest(item_type: DestinyItemType, map: &WeaponMap) -> Wea
     return buffer;
 }
 
-fn check_stats(stat_range: StatSplit, check_stat: i32) -> bool {
+fn check_stats(stat_range: &StatSplit, check_stat: &i32) -> bool {
     match stat_range {
         StatSplit::Above(stat_above) => stat_above < check_stat,
         StatSplit::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
@@ -275,13 +279,13 @@ async fn filter_stats(
 ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
     let mut found_weapons: WeaponArray = Vec::new();
     '_weapons: for item in items {
-        let item_stats = item.clone().stats.unwrap().stats.unwrap();
-        for (stat, stat_range) in stats.clone() {
+        let item_stats = item.stats.as_ref().unwrap().stats.as_ref().unwrap();
+        for (stat, stat_range) in &stats {
             let stat_option = item_stats.get(&stat);
             if stat_option.is_none() {
                 continue '_weapons;
             }
-            if !check_stats(stat_range, stat_option.unwrap().value) {
+            if !check_stats(stat_range, &stat_option.unwrap().value) {
                 continue '_weapons;
             }
         }
@@ -298,9 +302,10 @@ async fn filter_names(
     for item in items {
         if item
             .display_properties
-            .clone()
+            .as_ref()
             .unwrap()
             .name
+            .as_ref()
             .unwrap()
             .to_lowercase()
             .contains(search.to_lowercase().as_str())
@@ -319,15 +324,19 @@ pub async fn filter_perks(
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
         let hash = &item.hash;
+        let mut condition = true;
         for (perk_hash, slot) in &search {
             if let Some(actual_slot) = perks.get(hash).unwrap().get(&perk_hash) {
-                if slot == actual_slot
-                    || (slot == &PerkSlot::LeftRight
+                if slot != actual_slot
+                    && !(slot == &PerkSlot::LeftRight
                         && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
                 {
-                    found_weapons.push(item.clone());
+                    condition = false;
                 }
             }
+        }
+        if condition == true {
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
@@ -365,8 +374,8 @@ async fn filter_craftable(
 ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
-        if item.inventory.clone().unwrap().recipe_item_hash.is_some() == search {
-            found_weapons.push( item);
+        if item.inventory.as_ref().unwrap().recipe_item_hash.is_some() == search {
+            found_weapons.push(item);
         }
     }
     Ok(found_weapons)
@@ -380,7 +389,7 @@ async fn filter_energy(
 ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
-        if item.default_damage_type.clone() == search {
+        if item.default_damage_type == search {
             found_weapons.push(item);
         }
     }
@@ -393,7 +402,7 @@ async fn filter_rarity(
 ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
-        if item.inventory.clone().unwrap().tier_type == search {
+        if item.inventory.as_ref().unwrap().tier_type == search {
             found_weapons.push(item);
         }
     }
@@ -422,29 +431,35 @@ async fn filter_slot(
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
         let weapon_slot = item
-            .clone()
             .equipping_block
+            .as_ref()
             .unwrap()
             .equipment_slot_type_hash;
-        if weapon_slot == search.to_owned() as u32 {
+        if weapon_slot == search as u32 {
             found_weapons.push(item);
         }
     }
     Ok(found_weapons)
 }
 
-async fn filter_ammo(
-    items: WeaponArray,
-    search: DestinyAmmunitionType,
-) -> Result<WeaponArray, Box<dyn std::error::Error>> {
+async fn filter_ammo(items: WeaponArray, search: DestinyAmmunitionType) -> WeaponArray {
     let mut found_weapons: WeaponArray = Vec::new();
     for item in items {
-        if item.equipping_block.clone().unwrap().ammo_type == search {
+        if item.equipping_block.as_ref().unwrap().ammo_type == search {
             found_weapons.push(item);
         }
     }
-    Ok(found_weapons)
+    found_weapons
 }
+
+fn filter_ammo_new(item: &DestinyInventoryItemDefinition, search: DestinyAmmunitionType) -> bool {
+    if item.equipping_block.as_ref().unwrap().ammo_type == search {
+        true
+    } else {
+        false
+    }
+}
+
 impl Filter {
     pub async fn filter_for(
         &self,
@@ -458,7 +473,8 @@ impl Filter {
             buffer = filter_perks(self.perks.clone(), buffer, query).await?;
         }
         if let Some(query) = search.ammo {
-            buffer = filter_ammo(buffer, query).await?;
+            //buffer = filter_ammo(buffer, query).await;
+            buffer.retain(|x| filter_ammo_new(x, query))
         }
         if let Some(query) = search.slot {
             buffer = filter_slot(buffer, query).await?;
@@ -491,7 +507,8 @@ mod tests {
 
     use rustgie::types::destiny::*;
 
-    use crate::{FilterRequest, PerkMap, PerkSlot};
+    use crate::{BungieHash, FilterRequest, PerkMap, PerkSlot, StatHashes, StatSplit};
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test() {
@@ -514,13 +531,17 @@ mod tests {
         let weapon_filter = crate::Filter::new().await;
         let mut filter_params = FilterRequest::new();
         // /filter_params.perks = Some(365154968);
-        let mut perks: PerkMap = std::collections::HashMap::new();
-        perks.insert(3619207468, PerkSlot::LeftRight);
-        filter_params.perks = Some(perks);
-        let start = std::time::Instant::now();
+        //let mut perks: PerkMap = std::collections::HashMap::new();
+        //perks.insert(3619207468, PerkSlot::LeftRight);
+        //filter_params.perks = Some(perks);
+        let mut stats: HashMap<BungieHash, StatSplit> = HashMap::new();
+        filter_params.family = Some(DestinyItemSubType::RocketLauncher);
+        stats.insert(StatHashes::Velocity.into(), StatSplit::Below(35));
+        filter_params.stats = Some(stats);
+        let start: std::time::Instant = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params).await.unwrap();
         let duration = start.elapsed();
-        // /println!("{:?}", result);
+        println!("{:?}", result);
         println!("{} MS", duration.as_millis());
         println!("{} Items", result.len());
 
