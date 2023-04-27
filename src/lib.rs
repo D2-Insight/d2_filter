@@ -2,19 +2,12 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use rustgie_types::{
     api_response_::BungieApiResponse,
     destiny::{
-        components::craftables,
         config::DestinyManifest,
-        definitions::{
-            sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition,
-            DestinyInventoryItemStatDefinition,
-        },
+        definitions::{sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition},
         DamageType, DestinyAmmunitionType, DestinyItemSubType, DestinyItemType, TierType,
     },
 };
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{HashMap, HashSet};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
 pub type WeaponArray = Vec<DestinyInventoryItemDefinition>;
@@ -148,7 +141,7 @@ pub struct MinimizedWeapon {
     rarity: TierType,
     ammo_type: DestinyAmmunitionType,
     weapon_type: DestinyItemSubType,
-    stats: HashMap<BungieHash, DestinyInventoryItemStatDefinition>,
+    stats: HashMap<BungieHash, i32>,
 }
 
 impl Filter {
@@ -289,6 +282,10 @@ fn preprocess_manifest(item_type: DestinyItemType, map: WeaponMap) -> WeaponArra
 fn minimize_manifest(manifest: WeaponArray) -> Vec<MinimizedWeapon> {
     let mut minimized: Vec<MinimizedWeapon> = Vec::new();
     for item in manifest {
+        let mut new_stats: HashMap<BungieHash, i32> = HashMap::new();
+        for (hash, stat) in item.stats.unwrap().stats.unwrap() {
+            new_stats.insert(hash, stat.value);
+        }
         let new_item = MinimizedWeapon {
             name: item.display_properties.unwrap().name.unwrap(),
             hash: item.hash,
@@ -301,7 +298,7 @@ fn minimize_manifest(manifest: WeaponArray) -> Vec<MinimizedWeapon> {
             ammo_type: item.equipping_block.unwrap().ammo_type,
             weapon_type: item.item_sub_type,
             energy: item.default_damage_type,
-            stats: item.stats.unwrap().stats.unwrap(),
+            stats: new_stats,
         };
         minimized.push(new_item);
     }
@@ -330,7 +327,7 @@ fn filter_stats(
     let item_stats = &item.stats;
     for (stat, stat_range) in stats {
         if let Some(stat_option) = item_stats.get(stat) {
-            if !check_stats(stat_range, &stat_option.value) {
+            if !check_stats(stat_range, stat_option) {
                 return false;
             }
         } else {
