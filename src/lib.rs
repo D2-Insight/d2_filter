@@ -1,5 +1,4 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
-use reqwest::header::RETRY_AFTER;
 use rustgie::types::{
     api_response_::BungieApiResponse,
     destiny::{
@@ -10,7 +9,7 @@ use rustgie::types::{
 };
 use std::{
     collections::{HashMap, HashSet},
-    ops::Deref,
+    hash::Hash,
 };
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
@@ -539,6 +538,79 @@ fn filter_ammo_new(item: &DestinyInventoryItemDefinition, search: DestinyAmmunit
     item.equipping_block.as_ref().unwrap().ammo_type == search
 }
 
+pub fn filter_new(
+    item: &DestinyInventoryItemDefinition,
+    search: &FilterRequest,
+    adept: &BungieHashSet,
+    perks: &GunPerkMap,
+) -> bool {
+    if let Some(query) = search.ammo {
+        if !filter_ammo_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = search.adept {
+        if !filter_adept_new(item, query, adept) {
+            return false;
+        }
+    }
+    if let Some(query) = search.energy {
+        if !filter_energy_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = search.family {
+        if !filter_weapon_type_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = search.slot {
+        if !filter_slot_new(item, query.into()) {
+            return false;
+        }
+    }
+    if let Some(query) = search.rarity {
+        if !filter_rarity_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = search.craftable {
+        if !filter_craftable_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = &search.perks {
+        if !filter_perks_new(perks, item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = &search.stats {
+        if !filter_stats_new(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = &search.name {
+        if !filter_names_new(item, query.as_str()) {
+            return false;
+        }
+    }
+    true
+}
+
+//SUPER fast.
+impl Filter {
+    pub fn filter_for_new(&self, search: FilterRequest) -> WeaponArray {
+        let mut result: WeaponArray = Vec::new();
+        for item in &self.weapons {
+            if filter_new(item, &search, &self.adept, &self.perks) {
+                result.push(item.to_owned());
+            }
+        }
+        //buffer.retain(|item| filter_new(item, &search, &self.adept, &self.perks));
+        result
+    }
+}
+
 impl Filter {
     pub async fn filter_for(
         &self,
@@ -547,7 +619,7 @@ impl Filter {
         let mut buffer = self.weapons.clone();
         if let Some(query) = search.ammo {
             //buffer = filter_ammo(buffer, query).await;
-            buffer.retain(|item| filter_ammo_new(item, query))
+            buffer.retain(|item| filter_ammo_new(item, query));
         }
         if let Some(query) = search.family {
             //buffer = filter_weapon_type(buffer, query).await?;
@@ -624,15 +696,16 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: HashMap<BungieHash, StatSplit> = HashMap::new();
-        filter_params.family = Some(DestinyItemSubType::RocketLauncher);
+        //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
         stats.insert(StatHashes::Velocity.into(), StatSplit::Below(35));
-        filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
+        //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
-        let result = weapon_filter.filter_for(filter_params).await.unwrap();
+        //let result = weapon_filter.filter_for(filter_params).await.unwrap();
+        let result = weapon_filter.filter_for_new(filter_params);
         let duration = start.elapsed();
-        println!("{:?}", result);
-        println!("{} MS", duration.as_millis());
+        //println!("{:?}", result);
+        println!("{} MS", duration.as_micros());
         println!("{} Items", result.len());
 
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
@@ -649,6 +722,6 @@ mod tests {
         let duration = start.elapsed();
 
         println!("{:?}", test);
-        println!("{}", duration.as_millis());
+        println!("{}", duration.as_nanos());
     }
 }
