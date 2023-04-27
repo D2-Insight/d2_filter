@@ -1,25 +1,17 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
-use rustgie_types::{
-    api_response_::BungieApiResponse,
-    destiny::{
-        config::DestinyManifest,
-        definitions::{sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition},
-        DamageType, DestinyAmmunitionType, DestinyItemSubType, DestinyItemType, TierType,
-    },
-};
+use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
+use serde_repr::Deserialize_repr;
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 
-type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
-pub type WeaponArray = Vec<DestinyInventoryItemDefinition>;
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
 type BungieHashSet = HashSet<BungieHash>;
-type PlugMap = HashMap<u32, DestinyPlugSetDefinition>;
 type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
-#[derive(FromPrimitive, Debug, Clone, PartialEq)]
+#[derive(FromPrimitive, Debug, Clone, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum PerkSlot {
     Barrel = 0,
@@ -132,7 +124,7 @@ pub enum WeaponSlot {
 //Planning on reducing memory usage by preprocessing manifest into this struct.
 //craftable, adept, and sunset should just be in a seperate hashset to reduce space.
 //I could reduce a lot of these to u8 but keeping it near bungie spec
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize)]
 pub struct MinimizedWeapon {
     name: String,
     hash: u32,
@@ -147,110 +139,14 @@ pub struct MinimizedWeapon {
 impl Filter {
     //This is the slowest part, but mostly because networking + bungie, everything else is fast af
     pub fn new() -> Self {
-        let test: BungieApiResponse<DestinyManifest> =
-            reqwest::blocking::get("https://www.bungie.net/Platform/Destiny2/Manifest/")
-                .unwrap()
-                .json()
-                .unwrap();
-        let manifest_response = test.response.unwrap();
-        let weapon_path = manifest_response
-            .json_world_component_content_paths
-            .as_ref()
-            .unwrap()
-            .get("en")
-            .unwrap()
-            .get("DestinyInventoryItemDefinition")
-            .unwrap();
-
-        let perk_path = manifest_response
-            .json_world_component_content_paths
-            .as_ref()
-            .unwrap()
-            .get("en")
-            .unwrap()
-            .get("DestinyPlugSetDefinition")
-            .unwrap();
-
-        let inventory_items: WeaponMap =
-            reqwest::blocking::get(format!("https://www.bungie.net{weapon_path}"))
-                .unwrap()
-                .json()
-                .unwrap();
-
-        let plug_sets: PlugMap =
-            reqwest::blocking::get(format!("https://www.bungie.net{perk_path}"))
-                .unwrap()
-                .json()
-                .unwrap();
-
-        let weapons = preprocess_manifest(DestinyItemType::Weapon, inventory_items);
-        let adept: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
-        let craftable: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/craftable-hashes.json").unwrap().json().unwrap();
-        let mut perks: GunPerkMap = HashMap::new();
-        perks.reserve(weapons.len() - perks.capacity());
-        for item in &weapons {
-            let hash = item.hash;
-            let mut count: u8 = 0;
-            let mut cat_index: Vec<i32> = Vec::new();
-            let sockets = item.sockets.as_ref().unwrap();
-            for index in sockets.socket_categories.as_ref().unwrap() {
-                if index.socket_category_hash == 4241085061
-                /*Weapon Perks*/
-                {
-                    cat_index = Vec::from(index.socket_indexes.as_deref().unwrap());
-                    break;
-                }
-            }
-            let socket_entries = Vec::from(sockets.socket_entries.as_deref().unwrap());
-            let mut perk_map: PerkMap = HashMap::new();
-            for socket_index in &cat_index {
-                let socket = socket_entries.get(*socket_index as usize).unwrap();
-                if socket.single_initial_item_hash == 2302094943
-                /*Kill tracker >:(*/
-                {
-                    continue;
-                }
-
-                //STATIC PERK
-                perk_map.insert(socket.single_initial_item_hash, PerkSlot::from(count));
-                //STATIC PERKS SOME TIMES?
-                if let Some(hash) = &socket.reusable_plug_items {
-                    for static_perk in hash {
-                        perk_map.insert(static_perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-
-                //STATIC PERK TOO??
-                if let Some(hash) = socket.reusable_plug_set_hash {
-                    for perk in plug_sets
-                        .get(&hash)
-                        .unwrap()
-                        .reusable_plug_items
-                        .as_ref()
-                        .unwrap()
-                    {
-                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-
-                //RANDOM PERKS
-                if let Some(hash) = socket.randomized_plug_set_hash {
-                    for perk in plug_sets
-                        .get(&hash)
-                        .unwrap()
-                        .reusable_plug_items
-                        .as_ref()
-                        .unwrap()
-                    {
-                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-                count += 1;
-            }
-            perks.insert(hash, perk_map);
-        }
-        perks.shrink_to_fit();
-        let weapons = minimize_manifest(weapons);
+        let file: File = File::open("./weapons.cbor").unwrap();
+        let weapons: Vec<MinimizedWeapon> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./adept.cbor").unwrap();
+        let adept: HashSet<u32> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./craftable.cbor").unwrap();
+        let craftable: HashSet<u32> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./perks.cbor").unwrap();
+        let perks: GunPerkMap = serde_cbor::from_reader(file).unwrap();
 
         Filter {
             weapons,
@@ -265,44 +161,6 @@ impl Default for Filter {
     fn default() -> Self {
         Self::new()
     }
-}
-
-///Removes all unneeded manifest BS
-fn preprocess_manifest(item_type: DestinyItemType, map: WeaponMap) -> WeaponArray {
-    let mut buffer: WeaponArray = Vec::new();
-    for (_, item) in map {
-        if item.item_type == item_type {
-            buffer.push(item);
-        }
-    }
-    buffer.shrink_to_fit();
-    buffer
-}
-
-fn minimize_manifest(manifest: WeaponArray) -> Vec<MinimizedWeapon> {
-    let mut minimized: Vec<MinimizedWeapon> = Vec::new();
-    for item in manifest {
-        let mut new_stats: HashMap<BungieHash, i32> = HashMap::new();
-        for (hash, stat) in item.stats.unwrap().stats.unwrap() {
-            new_stats.insert(hash, stat.value);
-        }
-        let new_item = MinimizedWeapon {
-            name: item.display_properties.unwrap().name.unwrap(),
-            hash: item.hash,
-            slot: item
-                .equipping_block
-                .as_ref()
-                .unwrap()
-                .equipment_slot_type_hash,
-            rarity: item.inventory.unwrap().tier_type,
-            ammo_type: item.equipping_block.unwrap().ammo_type,
-            weapon_type: item.item_sub_type,
-            energy: item.default_damage_type,
-            stats: new_stats,
-        };
-        minimized.push(new_item);
-    }
-    minimized
 }
 
 fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
