@@ -50,6 +50,13 @@ pub struct FilterRequest {
     pub ammo: Option<DestinyAmmunitionType>,
     pub perks: Option<PerkMap>,
 }
+
+impl Default for FilterRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FilterRequest {
     pub fn new() -> Self {
         FilterRequest {
@@ -164,9 +171,7 @@ impl Filter {
             .await
             .unwrap();
 
-        let weapon_manifest = preprocess_manifest(DestinyItemType::Weapon, &inventory_items).await;
-        let weapons: Vec<DestinyInventoryItemDefinition> =
-            Vec::from_iter(weapon_manifest.values().cloned());
+        let weapons = preprocess_manifest(DestinyItemType::Weapon, inventory_items);
         let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
         let mut perks: GunPerkMap = HashMap::new();
         perks.reserve(weapons.len() - perks.capacity());
@@ -184,7 +189,7 @@ impl Filter {
                 }
             }
             let socket_entries = Vec::from(sockets.socket_entries.as_deref().unwrap());
-            let mut perks_holy_shit: HashMap<u32, PerkSlot> = HashMap::new();
+            let mut perk_map: PerkMap = HashMap::new();
             for socket_index in &cat_index {
                 let socket = socket_entries.get(*socket_index as usize).unwrap();
                 if socket.single_initial_item_hash == 2302094943
@@ -194,13 +199,11 @@ impl Filter {
                 }
 
                 //STATIC PERK
-                perks_holy_shit
-                    .insert(socket.single_initial_item_hash, PerkSlot::from(count as u8));
+                perk_map.insert(socket.single_initial_item_hash, PerkSlot::from(count));
                 //STATIC PERKS SOME TIMES?
                 if let Some(hash) = &socket.reusable_plug_items {
                     for static_perk in hash {
-                        perks_holy_shit
-                            .insert(static_perk.plug_item_hash, PerkSlot::from(count as u8));
+                        perk_map.insert(static_perk.plug_item_hash, PerkSlot::from(count));
                     }
                 }
 
@@ -213,7 +216,7 @@ impl Filter {
                         .as_ref()
                         .unwrap()
                     {
-                        perks_holy_shit.insert(perk.plug_item_hash, PerkSlot::from(count as u8));
+                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
                     }
                 }
 
@@ -226,30 +229,33 @@ impl Filter {
                         .as_ref()
                         .unwrap()
                     {
-                        perks_holy_shit.insert(perk.plug_item_hash, PerkSlot::from(count as u8));
+                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
                     }
                 }
                 count += 1;
             }
-            perks.insert(hash, perks_holy_shit);
+            perks.insert(hash, perk_map);
         }
+        perks.shrink_to_fit();
+
         Filter {
-            weapons: weapons,
-            adept: adept,
-            perks: perks,
+            weapons,
+            adept,
+            perks,
         }
     }
 }
 
 ///Removes all unneeded manifest BS
-async fn preprocess_manifest(item_type: DestinyItemType, map: &WeaponMap) -> WeaponMap {
-    let mut buffer: HashMap<u32, DestinyInventoryItemDefinition> = HashMap::new();
-    for (hash, item) in map {
+fn preprocess_manifest(item_type: DestinyItemType, map: WeaponMap) -> WeaponArray {
+    let mut buffer: WeaponArray = Vec::new();
+    for (_, item) in map {
         if item.item_type == item_type {
-            buffer.insert(hash.to_owned(), item.to_owned());
+            buffer.push(item);
         }
     }
-    return buffer;
+    buffer.shrink_to_fit();
+    buffer
 }
 
 fn check_stats(stat_range: &StatSplit, check_stat: &i32) -> bool {
@@ -273,7 +279,7 @@ fn filter_stats(
 ) -> bool {
     let item_stats = item.stats.as_ref().unwrap().stats.as_ref().unwrap();
     for (stat, stat_range) in stats {
-        if let Some(stat_option) = item_stats.get(&stat) {
+        if let Some(stat_option) = item_stats.get(stat) {
             if !check_stats(stat_range, &stat_option.value) {
                 return false;
             }
@@ -303,7 +309,7 @@ fn filter_perks(
     let hash = &item.hash;
 
     for (perk_hash, slot) in search {
-        if let Some(actual_slot) = perks.get(hash).unwrap().get(&perk_hash) {
+        if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
             if slot != actual_slot
                 && !(slot == &PerkSlot::LeftRight
                     && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
@@ -362,11 +368,6 @@ pub fn check_weapon(
             return false;
         }
     }
-    if let Some(query) = search.adept {
-        if !filter_adept(item, query, adept) {
-            return false;
-        }
-    }
     if let Some(query) = search.energy {
         if !filter_energy(item, query) {
             return false;
@@ -389,6 +390,11 @@ pub fn check_weapon(
     }
     if let Some(query) = search.craftable {
         if !filter_craftable(item, query) {
+            return false;
+        }
+    }
+    if let Some(query) = search.adept {
+        if !filter_adept(item, query, adept) {
             return false;
         }
     }
@@ -420,6 +426,7 @@ impl Filter {
                 result.push(item.to_owned());
             }
         }
+        result.shrink_to_fit();
         result
     }
 }
@@ -519,7 +526,7 @@ mod tests {
         let result = weapon_filter.filter_for_new(filter_params);
         let duration = start.elapsed();
         //println!("{:?}", result);
-        println!("{} MS", duration.as_micros());
+        println!("{} Micro Seconds", duration.as_micros());
         println!("{} Items", result.len());
 
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
