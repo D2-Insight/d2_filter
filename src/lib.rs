@@ -1,5 +1,5 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
-use rustgie::types::{
+use rustgie_types::{
     api_response_::BungieApiResponse,
     destiny::{
         config::DestinyManifest,
@@ -10,7 +10,7 @@ use rustgie::types::{
 use std::collections::{HashMap, HashSet};
 
 type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
-type WeaponArray = Vec<DestinyInventoryItemDefinition>;
+pub type WeaponArray = Vec<DestinyInventoryItemDefinition>;
 type BungieHash = u32;
 type WeaponHash = u32;
 type BungieHashSet = HashSet<BungieHash>;
@@ -38,9 +38,8 @@ pub struct Filter {
 
 #[allow(dead_code)]
 pub struct FilterRequest {
-    //family: Option<DestinyItemType>,
     pub family: Option<DestinyItemSubType>,
-    pub stats: Option<HashMap<BungieHash, StatSplit>>, //probably need to change this to a vec
+    pub stats: Option<HashMap<BungieHash, StatFilter>>, //probably need to change this to a vec
     pub energy: Option<DamageType>,
     pub slot: Option<WeaponSlot>,
     pub adept: Option<bool>,
@@ -107,7 +106,7 @@ pub enum StatHashes {
 }
 
 #[derive(Clone)]
-pub enum StatSplit {
+pub enum StatFilter {
     Above(i32),
     Between(i32, i32),
     Below(i32),
@@ -129,13 +128,11 @@ pub enum WeaponSlot {
 
 impl Filter {
     //This is the slowest part, but mostly because networking + bungie, everything else is fast af
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         let test: BungieApiResponse<DestinyManifest> =
-            reqwest::get("https://www.bungie.net/Platform/Destiny2/Manifest/")
-                .await
+            reqwest::blocking::get("https://www.bungie.net/Platform/Destiny2/Manifest/")
                 .unwrap()
                 .json()
-                .await
                 .unwrap();
         let manifest_response = test.response.unwrap();
         let weapon_path = manifest_response
@@ -157,22 +154,19 @@ impl Filter {
             .unwrap();
 
         let inventory_items: WeaponMap =
-            reqwest::get(format!("https://www.bungie.net{weapon_path}"))
-                .await
+            reqwest::blocking::get(format!("https://www.bungie.net{weapon_path}"))
                 .unwrap()
                 .json()
-                .await
                 .unwrap();
 
-        let plug_sets: PlugMap = reqwest::get(format!("https://www.bungie.net{perk_path}"))
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
+        let plug_sets: PlugMap =
+            reqwest::blocking::get(format!("https://www.bungie.net{perk_path}"))
+                .unwrap()
+                .json()
+                .unwrap();
 
         let weapons = preprocess_manifest(DestinyItemType::Weapon, inventory_items);
-        let adept: BungieHashSet = reqwest::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").await.unwrap().json().await.unwrap();
+        let adept: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
         let mut perks: GunPerkMap = HashMap::new();
         perks.reserve(weapons.len() - perks.capacity());
         for item in &weapons {
@@ -258,24 +252,24 @@ fn preprocess_manifest(item_type: DestinyItemType, map: WeaponMap) -> WeaponArra
     buffer
 }
 
-fn check_stats(stat_range: &StatSplit, check_stat: &i32) -> bool {
+fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
     match stat_range {
-        StatSplit::Above(stat_above) => stat_above < check_stat,
-        StatSplit::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
-        StatSplit::Below(stat_below) => stat_below > check_stat,
-        StatSplit::AtOrAbove(stat_above) => stat_above <= check_stat,
-        StatSplit::AtOrBetween(stat_low, stat_high) => {
+        StatFilter::Above(stat_above) => stat_above < check_stat,
+        StatFilter::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
+        StatFilter::Below(stat_below) => stat_below > check_stat,
+        StatFilter::AtOrAbove(stat_above) => stat_above <= check_stat,
+        StatFilter::AtOrBetween(stat_low, stat_high) => {
             stat_high >= check_stat || stat_low <= check_stat
         }
-        StatSplit::AtOrBelow(stat_below) => stat_below >= check_stat,
-        StatSplit::At(stat_at) => stat_at == check_stat,
+        StatFilter::AtOrBelow(stat_below) => stat_below >= check_stat,
+        StatFilter::At(stat_at) => stat_at == check_stat,
         _ => true,
     }
 }
 
 fn filter_stats(
     item: &DestinyInventoryItemDefinition,
-    stats: &std::collections::HashMap<u32, StatSplit>,
+    stats: &std::collections::HashMap<u32, StatFilter>,
 ) -> bool {
     let item_stats = item.stats.as_ref().unwrap().stats.as_ref().unwrap();
     for (stat, stat_range) in stats {
@@ -433,7 +427,7 @@ impl Filter {
 
 //18 miliseconds in debug
 impl Filter {
-    pub async fn filter_for(
+    pub fn filter_for(
         &self,
         search: FilterRequest,
     ) -> Result<WeaponArray, Box<dyn std::error::Error>> {
@@ -487,42 +481,42 @@ impl Filter {
 #[cfg(test)]
 mod tests {
 
-    use rustgie::types::destiny::*;
+    use rustgie_types::destiny::*;
 
-    use crate::{BungieHash, FilterRequest, StatHashes, StatSplit};
+    use crate::{BungieHash, FilterRequest, StatFilter, StatHashes};
     use std::collections::HashMap;
 
-    #[tokio::test]
-    async fn test() {
-        let weapon_filter = crate::Filter::new().await;
+    #[test]
+    fn test() {
+        let weapon_filter = crate::Filter::new();
         let mut filter_params = FilterRequest::new();
         filter_params.adept = Some(true);
         filter_params.family = Some(DestinyItemSubType::SubmachineGun);
         filter_params.slot = Some(crate::WeaponSlot::Top);
         filter_params.energy = Some(DamageType::Strand);
         let start = std::time::Instant::now();
-        let result = weapon_filter.filter_for(filter_params).await.unwrap();
+        let result = weapon_filter.filter_for(filter_params).unwrap();
         let duration = start.elapsed();
         println!("{}", duration.as_millis());
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
         assert_eq!(result.len(), 1);
     }
 
-    #[tokio::test]
-    async fn test_perks() {
-        let weapon_filter = crate::Filter::new().await;
+    #[test]
+    fn test_perks() {
+        let weapon_filter = crate::Filter::new();
         let mut filter_params = FilterRequest::new();
         // /filter_params.perks = Some(365154968);
         //let mut perks: PerkMap = std::collections::HashMap::new();
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
-        let mut stats: HashMap<BungieHash, StatSplit> = HashMap::new();
+        let mut stats: HashMap<BungieHash, StatFilter> = HashMap::new();
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
-        stats.insert(StatHashes::Velocity.into(), StatSplit::Below(35));
+        stats.insert(StatHashes::Velocity.into(), StatFilter::Below(35));
         //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
-        //let result = weapon_filter.filter_for(filter_params).await.unwrap();
+        //let result = weapon_filter.filter_for(filter_params).unwrap();
         let result = weapon_filter.filter_for_new(filter_params);
         let duration = start.elapsed();
         //println!("{:?}", result);
@@ -533,9 +527,9 @@ mod tests {
         //assert_eq!(result.get(&3193598749).is_some(), true);
     }
 
-    #[tokio::test]
-    async fn test_rose() {
-        let weapon_filter = crate::Filter::new().await;
+    #[test]
+    fn test_rose() {
+        let weapon_filter = crate::Filter::new();
         let start = std::time::Instant::now();
 
         let test = weapon_filter.perks.get(&854379020).unwrap();
