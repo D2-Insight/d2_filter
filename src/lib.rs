@@ -11,7 +11,7 @@ type BungieHashSet = HashSet<BungieHash>;
 type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
-#[derive(FromPrimitive, Debug, Clone, PartialEq, Deserialize_repr)]
+#[derive(FromPrimitive, Debug, Clone, Copy, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum PerkSlot {
     Barrel = 0,
@@ -99,7 +99,7 @@ pub enum StatHashes {
     Unkown = 0,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum StatFilter {
     Above(i32),
     Between(i32, i32),
