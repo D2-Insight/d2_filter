@@ -305,10 +305,9 @@ pub fn check_weapon(
     true
 }
 
-//SUPER fast.
-//less than 1ms in debug???
+
 impl Filter {
-    pub fn filter_for_new(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
+    pub fn filter_for(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
         let mut result: Vec<MinimizedWeapon> = Vec::new();
         for item in &self.weapons {
             if check_weapon(item, &search, &self.adept, &self.perks, &self.craftable) {
@@ -320,58 +319,6 @@ impl Filter {
     }
 }
 
-//18 miliseconds in debug
-impl Filter {
-    pub fn filter_for(
-        &self,
-        search: FilterRequest,
-    ) -> Result<Vec<MinimizedWeapon>, Box<dyn std::error::Error>> {
-        let mut buffer = self.weapons.clone();
-        if let Some(query) = search.ammo {
-            //buffer = filter_ammo(buffer, query).await;
-            buffer.retain(|item| filter_ammo(item, query));
-        }
-        if let Some(query) = search.family {
-            //buffer = filter_weapon_type(buffer, query).await?;
-            buffer.retain(|item| filter_weapon_type(item, query))
-        }
-        if let Some(query) = search.perks {
-            //buffer = filter_perks(self.perks.clone(), buffer, query).await?;
-            buffer.retain(|item| filter_perks(&self.perks, item, &query));
-        }
-        if let Some(query) = search.slot {
-            //buffer = filter_slot(buffer, query).await?;
-            let query = query as u32;
-            buffer.retain(|item| filter_slot(item, query))
-        }
-        if let Some(query) = search.energy {
-            //buffer = filter_energy(buffer, query).await?;
-            buffer.retain(|item| filter_energy(item, query));
-        }
-        if let Some(query) = search.rarity {
-            //buffer = filter_rarity(buffer, query).await?;
-            buffer.retain(|item| filter_rarity(item, query));
-        }
-        if let Some(query) = search.adept {
-            //buffer = filter_adept(buffer, query, self.adept.clone()).await?;
-            buffer.retain(|item| filter_adept(item, query, &self.adept));
-        }
-        if let Some(query) = search.craftable {
-            //buffer = filter_craftable(buffer, query).await?;
-            buffer.retain(|item| filter_craftable(item, query, &self.craftable));
-        }
-        if let Some(query) = search.stats {
-            //buffer = filter_stats(buffer, query).await?;
-            buffer.retain(|item| filter_stats(item, &query));
-        }
-        if let Some(query) = search.name {
-            //buffer = filter_names(buffer, query).await?;
-            buffer.retain(|item| filter_names(item, query.as_str()));
-        }
-
-        Ok(buffer)
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -390,7 +337,7 @@ mod tests {
         filter_params.slot = Some(crate::WeaponSlot::Top);
         filter_params.energy = Some(DamageType::Strand);
         let start = std::time::Instant::now();
-        let result = weapon_filter.filter_for(filter_params).unwrap();
+        let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
         println!("{}", duration.as_millis());
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
@@ -412,7 +359,7 @@ mod tests {
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
         //let result = weapon_filter.filter_for(filter_params).unwrap();
-        let result = weapon_filter.filter_for_new(filter_params);
+        let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
         //println!("{:?}", result);
         println!("{} Micro Seconds", duration.as_micros());
