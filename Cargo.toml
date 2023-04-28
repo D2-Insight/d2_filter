@@ -19,3 +19,4 @@ chrono = "0.4.24"
 opt-level="z"
 strip = "symbols"
 lto = true
+panic = "abort"

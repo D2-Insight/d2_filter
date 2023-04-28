@@ -8,7 +8,7 @@ pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
 type BungieHashSet = HashSet<BungieHash>;
-type PerkMap = HashMap<WeaponHash, PerkSlot>;
+pub type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
 #[derive(FromPrimitive, Debug, Clone, Copy, PartialEq, Deserialize_repr)]
@@ -33,7 +33,7 @@ pub struct Filter {
 #[allow(dead_code)]
 pub struct FilterRequest {
     pub family: Option<DestinyItemSubType>,
-    pub stats: Option<HashMap<BungieHash, StatFilter>>, //probably need to change this to a vec
+    pub stats: Option<Vec<(BungieHash, StatFilter)>>, //probably need to change this to a vec
     pub energy: Option<DamageType>,
     pub slot: Option<WeaponSlot>,
     pub adept: Option<bool>,
@@ -163,6 +163,7 @@ impl Default for Filter {
     }
 }
 
+#[inline(always)]
 fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
     match stat_range {
         StatFilter::Above(stat_above) => stat_above < check_stat,
@@ -178,10 +179,8 @@ fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
     }
 }
 
-fn filter_stats(
-    item: &MinimizedWeapon,
-    stats: &std::collections::HashMap<u32, StatFilter>,
-) -> bool {
+#[inline(always)]
+fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(BungieHash, StatFilter)>) -> bool {
     let item_stats = &item.stats;
     for (stat, stat_range) in stats {
         if let Some(stat_option) = item_stats.get(stat) {
@@ -195,12 +194,14 @@ fn filter_stats(
     true
 }
 
+#[inline(always)]
 fn filter_names(item: &MinimizedWeapon, search: &str) -> bool {
     item.name
         .to_lowercase()
         .contains(search.to_lowercase().as_str())
 }
 
+#[inline(always)]
 fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) -> bool {
     let hash = &item.hash;
 
@@ -217,100 +218,103 @@ fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) ->
     true
 }
 
+#[inline(always)]
 fn filter_weapon_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
     item.weapon_type == search
 }
 
+#[inline(always)]
 fn filter_craftable(item: &MinimizedWeapon, search: bool, craftables: &BungieHashSet) -> bool {
     craftables.get(&item.hash).is_some() == search
 }
 
+#[inline(always)]
 fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
     item.energy == search
 }
 
+#[inline(always)]
 fn filter_rarity(item: &MinimizedWeapon, search: TierType) -> bool {
     item.rarity == search
 }
 
+#[inline(always)]
 fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet) -> bool {
     adept.get(&item.hash).is_some() == search
 }
 
+#[inline(always)]
 fn filter_slot(item: &MinimizedWeapon, search: u32) -> bool {
     item.slot == search
 }
 
+#[inline(always)]
 fn filter_ammo(item: &MinimizedWeapon, search: DestinyAmmunitionType) -> bool {
     item.ammo_type == search
 }
 
-pub fn check_weapon(
-    item: &MinimizedWeapon,
-    search: &FilterRequest,
-    adept: &BungieHashSet,
-    perks: &GunPerkMap,
-    craftables: &BungieHashSet,
-) -> bool {
-    if let Some(query) = search.ammo {
-        if !filter_ammo(item, query) {
-            return false;
+impl Filter {
+    #[inline(always)]
+    pub fn check_weapon(&self, item: &MinimizedWeapon, search: &FilterRequest) -> bool {
+        if let Some(query) = search.ammo {
+            if !filter_ammo(item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.energy {
-        if !filter_energy(item, query) {
-            return false;
+        if let Some(query) = search.energy {
+            if !filter_energy(item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.family {
-        if !filter_weapon_type(item, query) {
-            return false;
+        if let Some(query) = search.family {
+            if !filter_weapon_type(item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.slot {
-        if !filter_slot(item, query.into()) {
-            return false;
+        if let Some(query) = search.slot {
+            if !filter_slot(item, query.into()) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.rarity {
-        if !filter_rarity(item, query) {
-            return false;
+        if let Some(query) = search.rarity {
+            if !filter_rarity(item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.craftable {
-        if !filter_craftable(item, query, craftables) {
-            return false;
+        if let Some(query) = search.craftable {
+            if !filter_craftable(item, query, &self.craftable) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = search.adept {
-        if !filter_adept(item, query, adept) {
-            return false;
+        if let Some(query) = search.adept {
+            if !filter_adept(item, query, &self.adept) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = &search.perks {
-        if !filter_perks(perks, item, query) {
-            return false;
+        if let Some(query) = &search.perks {
+            if !filter_perks(&self.perks, item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = &search.stats {
-        if !filter_stats(item, query) {
-            return false;
+        if let Some(query) = &search.stats {
+            if !filter_stats(item, query) {
+                return false;
+            }
         }
-    }
-    if let Some(query) = &search.name {
-        if !filter_names(item, query.as_str()) {
-            return false;
+        if let Some(query) = &search.name {
+            if !filter_names(item, query.as_str()) {
+                return false;
+            }
         }
+        true
     }
-    true
 }
-
 
 impl Filter {
     pub fn filter_for(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
         let mut result: Vec<MinimizedWeapon> = Vec::new();
         for item in &self.weapons {
-            if check_weapon(item, &search, &self.adept, &self.perks, &self.craftable) {
+            if self.check_weapon(item, &search) {
                 result.push(item.to_owned());
             }
         }
@@ -319,14 +323,12 @@ impl Filter {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
 
     use rustgie_types::destiny::*;
 
     use crate::{BungieHash, FilterRequest, StatFilter, StatHashes};
-    use std::collections::HashMap;
 
     #[test]
     fn test() {
@@ -352,9 +354,9 @@ mod tests {
         //let mut perks: PerkMap = std::collections::HashMap::new();
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
-        let mut stats: HashMap<BungieHash, StatFilter> = HashMap::new();
+        let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
-        stats.insert(StatHashes::Velocity.into(), StatFilter::Below(35));
+        stats.push((StatHashes::Velocity.into(), StatFilter::Below(35)));
         //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
