@@ -1,4 +1,4 @@
-use num_enum::{FromPrimitive, IntoPrimitive};
+use num_enum::IntoPrimitive;
 use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
 use serde_repr::Deserialize_repr;
 use std::collections::{HashMap, HashSet};
@@ -7,11 +7,13 @@ use std::fs::File;
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
+type StatVec = Vec<(BungieHash, StatFilter)>;
 type BungieHashSet = HashSet<BungieHash>;
 pub type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
-#[derive(FromPrimitive, Debug, Clone, Copy, PartialEq, Deserialize_repr)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum PerkSlot {
     Barrel = 0,
@@ -19,7 +21,6 @@ pub enum PerkSlot {
     Left = 2,
     Right = 3,
     Origin = 4,
-    #[num_enum(default)]
     Unknown = 5,
     LeftRight,
 }
@@ -30,10 +31,9 @@ pub struct Filter {
     craftable: BungieHashSet,
 }
 
-#[allow(dead_code)]
 pub struct FilterRequest {
     pub family: Option<DestinyItemSubType>,
-    pub stats: Option<Vec<(BungieHash, StatFilter)>>, //probably need to change this to a vec
+    pub stats: Option<StatVec>,
     pub energy: Option<DamageType>,
     pub slot: Option<WeaponSlot>,
     pub adept: Option<bool>,
@@ -112,13 +112,39 @@ pub enum StatFilter {
     Maximum,
 }
 
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy)]
+#[derive(Clone, Copy, IntoPrimitive)]
 #[repr(u32)]
 pub enum WeaponSlot {
     Top = 1498876634,
     Middle = 2465295065,
-    #[default]
     Bottom = 953998645,
+}
+
+#[repr(u8)]
+enum MiniWeaponSlot {
+    Top = 1,
+    Middle = 2,
+    Bottom = 3,
+}
+
+impl Into<WeaponSlot> for MiniWeaponSlot {
+    fn into(self) -> WeaponSlot {
+        match self {
+            MiniWeaponSlot::Bottom => WeaponSlot::Bottom,
+            MiniWeaponSlot::Middle => WeaponSlot::Middle,
+            MiniWeaponSlot::Top => WeaponSlot::Top,
+        }
+    }
+}
+
+impl Into<MiniWeaponSlot> for WeaponSlot {
+    fn into(self) -> MiniWeaponSlot {
+        match self {
+            WeaponSlot::Bottom => MiniWeaponSlot::Bottom,
+            WeaponSlot::Middle => MiniWeaponSlot::Middle,
+            WeaponSlot::Top => MiniWeaponSlot::Top,
+        }
+    }
 }
 
 //Planning on reducing memory usage by preprocessing manifest into this struct.
@@ -207,9 +233,9 @@ fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) ->
 
     for (perk_hash, slot) in search {
         if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
-            if slot != actual_slot
-                && !(slot == &PerkSlot::LeftRight
-                    && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
+            if !(slot == actual_slot
+                && slot == &PerkSlot::LeftRight
+                && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
             {
                 return false;
             }
@@ -311,6 +337,7 @@ impl Filter {
 }
 
 impl Filter {
+    #[inline(always)]
     pub fn filter_for(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
         let mut result: Vec<MinimizedWeapon> = Vec::new();
         for item in &self.weapons {
