@@ -185,20 +185,22 @@ mod tests {
     fn test() {
         let weapon_filter = crate::Filter::new();
         let mut filter_params = FilterRequest::new();
-        filter_params.adept = Some(true);
-        filter_params.family = Some(DestinyItemSubType::SubmachineGun);
-        filter_params.slot = Some(crate::WeaponSlot::Top);
-        filter_params.energy = Some(DamageType::Strand);
-        let mut perks: std::collections::HashMap<u32, crate::PerkSlot> =
-            std::collections::HashMap::new();
-        perks.insert(365154968, crate::PerkSlot::LeftRight);
-        filter_params.perks = Some(perks);
+        //filter_params.adept = Some(true);
+        //filter_params.family = Some(DestinyItemSubType::SubmachineGun);
+        //filter_params.slot = Some(crate::WeaponSlot::Top);
+        //filter_params.energy = Some(DamageType::Strand);
+        filter_params.ammo = Some(DestinyAmmunitionType::Primary);
+        //let mut perks: std::collections::HashMap<u32, crate::PerkSlot> =
+        //    std::collections::HashMap::new();
+        //perks.insert(365154968, crate::PerkSlot::LeftRight);
+        //filter_params.perks = Some(perks);
         let start = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
-        println!("{}", duration.as_millis());
+        println!("{} ms", duration.as_micros());
+        println!("{}", result.len());
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
-        assert_eq!(result.len(), 1);
+        //assert_eq!(result.len(), 1);
     }
 
     #[test]

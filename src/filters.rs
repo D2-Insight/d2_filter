@@ -22,7 +22,7 @@ pub fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(BungieHash, StatFilter)
     for (stat, stat_range) in stats {
         if !item_stats
             .get(stat)
-            .and_then(|stat_option| Option::Some(check_stats(stat_range, stat_option)))
+            .map(|stat_option| check_stats(stat_range, stat_option))
             .unwrap_or(false)
         {
             return false;
@@ -46,12 +46,10 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
         let perk = perks.get(hash).unwrap();
         if !perk
             .get(perk_hash)
-            .and_then(|actual_slot| {
-                Option::Some(
-                    slot == actual_slot
-                        || slot == &PerkSlot::LeftRight
-                            && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right),
-                )
+            .map(|actual_slot| {
+                slot == actual_slot
+                    || slot == &PerkSlot::LeftRight
+                        && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right)
             })
             .unwrap_or(false)
         {

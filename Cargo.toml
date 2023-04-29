@@ -9,7 +9,7 @@ edition = "2021"
 num_enum = "0.6.0"
 serde = { version = "1.0.160", features = ["derive"], default-features = false }
 serde_cbor = "0.11.2"
-rustgie_types = { git = "https://github.com/BarmonHammer/rustgie.git", default-features = false }
+rustgie_types = { git = "https://github.com/ashakoor/rustgie.git", default-features = false }
 serde_repr = "0.1.12"
 
 [dev-dependencies]

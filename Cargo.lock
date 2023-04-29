@@ -378,11 +378,10 @@ dependencies = [
 [[package]]
 name = "rustgie_types"
 version = "0.3.0-beta"
-source = "git+https://github.com/BarmonHammer/rustgie.git#e806cd49380e88f5c5fcf44f7f8df7af4fd1c64e"
+source = "git+https://github.com/ashakoor/rustgie.git#49985b4772a561060c5980d236c42ddf57748385"
 dependencies = [
  "anyhow",
  "enumflags2",
- "num_enum",
  "serde",
  "serde_json",
  "serde_repr",
