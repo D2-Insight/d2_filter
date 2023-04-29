@@ -43,13 +43,19 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
     let hash = &item.hash;
 
     for (perk_hash, slot) in search {
-        if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
-            if !(slot == actual_slot
-                || slot == &PerkSlot::LeftRight
-                    && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
-            {
-                return false;
-            }
+        let perk = perks.get(hash).unwrap();
+        if !perk
+            .get(perk_hash)
+            .and_then(|actual_slot| {
+                Option::Some(
+                    slot == actual_slot
+                        || slot == &PerkSlot::LeftRight
+                            && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right),
+                )
+            })
+            .unwrap_or(false)
+        {
+            return false;
         }
     }
     true

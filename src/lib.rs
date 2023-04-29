@@ -189,6 +189,10 @@ mod tests {
         filter_params.family = Some(DestinyItemSubType::SubmachineGun);
         filter_params.slot = Some(crate::WeaponSlot::Top);
         filter_params.energy = Some(DamageType::Strand);
+        let mut perks: std::collections::HashMap<u32, crate::PerkSlot> =
+            std::collections::HashMap::new();
+        perks.insert(365154968, crate::PerkSlot::LeftRight);
+        filter_params.perks = Some(perks);
         let start = std::time::Instant::now();
         let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
