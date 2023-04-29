@@ -1,36 +1,23 @@
-use num_enum::{FromPrimitive, IntoPrimitive};
-use rustgie_types::{
-    api_response_::BungieApiResponse,
-    destiny::{
-        config::DestinyManifest,
-        definitions::{sockets::DestinyPlugSetDefinition, DestinyInventoryItemDefinition},
-        DamageType, DestinyAmmunitionType, DestinyItemSubType, DestinyItemType, TierType,
-    },
-};
-use std::collections::{HashMap, HashSet};
+mod enums;
+mod filters;
 
-type WeaponMap = HashMap<u32, DestinyInventoryItemDefinition>;
-pub type WeaponArray = Vec<DestinyInventoryItemDefinition>;
+use crate::filters::*;
+
+use enums::*;
+use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
+use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
+type StatVec = Vec<(BungieHash, StatFilter)>;
 type BungieHashSet = HashSet<BungieHash>;
-type PlugMap = HashMap<u32, DestinyPlugSetDefinition>;
-type PerkMap = HashMap<WeaponHash, PerkSlot>;
+pub type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
-#[derive(FromPrimitive, Debug, Clone, PartialEq)]
-#[repr(u8)]
-pub enum PerkSlot {
-    Barrel = 0,
-    Magazine = 1,
-    Left = 2,
-    Right = 3,
-    Origin = 4,
-    #[num_enum(default)]
-    Unknown = 5,
-    LeftRight,
-}
+
 pub struct Filter {
     weapons: Vec<MinimizedWeapon>,
     adept: BungieHashSet,
@@ -38,10 +25,9 @@ pub struct Filter {
     craftable: BungieHashSet,
 }
 
-#[allow(dead_code)]
 pub struct FilterRequest {
     pub family: Option<DestinyItemSubType>,
-    pub stats: Option<HashMap<BungieHash, StatFilter>>, //probably need to change this to a vec
+    pub stats: Option<StatVec>,
     pub energy: Option<DamageType>,
     pub slot: Option<WeaponSlot>,
     pub adept: Option<bool>,
@@ -75,64 +61,10 @@ impl FilterRequest {
     }
 }
 
-//thanks calc api lol
-#[derive(IntoPrimitive)]
-#[repr(u32)]
-pub enum StatHashes {
-    Accuracy = 1591432999,
-    AimAssist = 1345609583,
-    Airborne = 2714457168,
-    AmmoCapacity = 925767036,
-    Attack = 1480404414,
-    BlastRadius = 3614673599,
-    ChargeRate = 3022301683,
-    ChargeTime = 2961396640,
-    DrawTime = 447667954,
-    GuardEfficiency = 2762071195,
-    GuardEndurance = 3736848092,
-    GuardResistance = 209426660,
-    Handling = 943549884,
-    Impact = 4043523819,
-    InventorySize = 1931675084,
-    Magazine = 3871231066,
-    Range = 1240592695,
-    RecoilDir = 2715839340,
-    Recovery = 1943323491,
-    Reload = 4188031367,
-    Rpm = 4284893193,
-    ShieldDuration = 1842278586,
-    SwingSpeed = 2837207746,
-    Velocity = 2523465841,
-    Zoom = 3555269338,
-    Unkown = 0,
-}
-
-#[derive(Clone)]
-pub enum StatFilter {
-    Above(i32),
-    Between(i32, i32),
-    Below(i32),
-    AtOrAbove(i32),
-    AtOrBelow(i32),
-    AtOrBetween(i32, i32),
-    At(i32),
-    Minimum,
-    Maximum,
-}
-
-#[derive(FromPrimitive, IntoPrimitive, Clone, Copy)]
-#[repr(u32)]
-pub enum WeaponSlot {
-    Top = 1498876634,
-    Middle = 2465295065,
-    #[default]
-    Bottom = 953998645,
-}
-
 //Planning on reducing memory usage by preprocessing manifest into this struct.
 //craftable, adept, and sunset should just be in a seperate hashset to reduce space.
 //I could reduce a lot of these to u8 but keeping it near bungie spec
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 pub struct MinimizedWeapon {
     name: String,
     hash: u32,
@@ -147,110 +79,14 @@ pub struct MinimizedWeapon {
 impl Filter {
     //This is the slowest part, but mostly because networking + bungie, everything else is fast af
     pub fn new() -> Self {
-        let test: BungieApiResponse<DestinyManifest> =
-            reqwest::blocking::get("https://www.bungie.net/Platform/Destiny2/Manifest/")
-                .unwrap()
-                .json()
-                .unwrap();
-        let manifest_response = test.response.unwrap();
-        let weapon_path = manifest_response
-            .json_world_component_content_paths
-            .as_ref()
-            .unwrap()
-            .get("en")
-            .unwrap()
-            .get("DestinyInventoryItemDefinition")
-            .unwrap();
-
-        let perk_path = manifest_response
-            .json_world_component_content_paths
-            .as_ref()
-            .unwrap()
-            .get("en")
-            .unwrap()
-            .get("DestinyPlugSetDefinition")
-            .unwrap();
-
-        let inventory_items: WeaponMap =
-            reqwest::blocking::get(format!("https://www.bungie.net{weapon_path}"))
-                .unwrap()
-                .json()
-                .unwrap();
-
-        let plug_sets: PlugMap =
-            reqwest::blocking::get(format!("https://www.bungie.net{perk_path}"))
-                .unwrap()
-                .json()
-                .unwrap();
-
-        let weapons = preprocess_manifest(DestinyItemType::Weapon, inventory_items);
-        let adept: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/adept-weapon-hashes.json").unwrap().json().unwrap();
-        let craftable: BungieHashSet = reqwest::blocking::get("https://raw.githubusercontent.com/DestinyItemManager/d2-additional-info/master/output/craftable-hashes.json").unwrap().json().unwrap();
-        let mut perks: GunPerkMap = HashMap::new();
-        perks.reserve(weapons.len() - perks.capacity());
-        for item in &weapons {
-            let hash = item.hash;
-            let mut count: u8 = 0;
-            let mut cat_index: Vec<i32> = Vec::new();
-            let sockets = item.sockets.as_ref().unwrap();
-            for index in sockets.socket_categories.as_ref().unwrap() {
-                if index.socket_category_hash == 4241085061
-                /*Weapon Perks*/
-                {
-                    cat_index = Vec::from(index.socket_indexes.as_deref().unwrap());
-                    break;
-                }
-            }
-            let socket_entries = Vec::from(sockets.socket_entries.as_deref().unwrap());
-            let mut perk_map: PerkMap = HashMap::new();
-            for socket_index in &cat_index {
-                let socket = socket_entries.get(*socket_index as usize).unwrap();
-                if socket.single_initial_item_hash == 2302094943
-                /*Kill tracker >:(*/
-                {
-                    continue;
-                }
-
-                //STATIC PERK
-                perk_map.insert(socket.single_initial_item_hash, PerkSlot::from(count));
-                //STATIC PERKS SOME TIMES?
-                if let Some(hash) = &socket.reusable_plug_items {
-                    for static_perk in hash {
-                        perk_map.insert(static_perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-
-                //STATIC PERK TOO??
-                if let Some(hash) = socket.reusable_plug_set_hash {
-                    for perk in plug_sets
-                        .get(&hash)
-                        .unwrap()
-                        .reusable_plug_items
-                        .as_ref()
-                        .unwrap()
-                    {
-                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-
-                //RANDOM PERKS
-                if let Some(hash) = socket.randomized_plug_set_hash {
-                    for perk in plug_sets
-                        .get(&hash)
-                        .unwrap()
-                        .reusable_plug_items
-                        .as_ref()
-                        .unwrap()
-                    {
-                        perk_map.insert(perk.plug_item_hash, PerkSlot::from(count));
-                    }
-                }
-                count += 1;
-            }
-            perks.insert(hash, perk_map);
-        }
-        perks.shrink_to_fit();
-        let weapons = minimize_manifest(weapons);
+        let file: File = File::open("./weapons.cbor").unwrap();
+        let weapons: Vec<MinimizedWeapon> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./adept.cbor").unwrap();
+        let adept: HashSet<u32> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./craftable.cbor").unwrap();
+        let craftable: HashSet<u32> = serde_cbor::from_reader(file).unwrap();
+        let file: File = File::open("./perks.cbor").unwrap();
+        let perks: GunPerkMap = serde_cbor::from_reader(file).unwrap();
 
         Filter {
             weapons,
@@ -267,251 +103,74 @@ impl Default for Filter {
     }
 }
 
-///Removes all unneeded manifest BS
-fn preprocess_manifest(item_type: DestinyItemType, map: WeaponMap) -> WeaponArray {
-    let mut buffer: WeaponArray = Vec::new();
-    for (_, item) in map {
-        if item.item_type == item_type {
-            buffer.push(item);
-        }
-    }
-    buffer.shrink_to_fit();
-    buffer
-}
-
-fn minimize_manifest(manifest: WeaponArray) -> Vec<MinimizedWeapon> {
-    let mut minimized: Vec<MinimizedWeapon> = Vec::new();
-    for item in manifest {
-        let mut new_stats: HashMap<BungieHash, i32> = HashMap::new();
-        for (hash, stat) in item.stats.unwrap().stats.unwrap() {
-            new_stats.insert(hash, stat.value);
-        }
-        let new_item = MinimizedWeapon {
-            name: item.display_properties.unwrap().name.unwrap(),
-            hash: item.hash,
-            slot: item
-                .equipping_block
-                .as_ref()
-                .unwrap()
-                .equipment_slot_type_hash,
-            rarity: item.inventory.unwrap().tier_type,
-            ammo_type: item.equipping_block.unwrap().ammo_type,
-            weapon_type: item.item_sub_type,
-            energy: item.default_damage_type,
-            stats: new_stats,
-        };
-        minimized.push(new_item);
-    }
-    minimized
-}
-
-fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
-    match stat_range {
-        StatFilter::Above(stat_above) => stat_above < check_stat,
-        StatFilter::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
-        StatFilter::Below(stat_below) => stat_below > check_stat,
-        StatFilter::AtOrAbove(stat_above) => stat_above <= check_stat,
-        StatFilter::AtOrBetween(stat_low, stat_high) => {
-            stat_high >= check_stat || stat_low <= check_stat
-        }
-        StatFilter::AtOrBelow(stat_below) => stat_below >= check_stat,
-        StatFilter::At(stat_at) => stat_at == check_stat,
-        _ => true,
-    }
-}
-
-fn filter_stats(
-    item: &MinimizedWeapon,
-    stats: &std::collections::HashMap<u32, StatFilter>,
-) -> bool {
-    let item_stats = &item.stats;
-    for (stat, stat_range) in stats {
-        if let Some(stat_option) = item_stats.get(stat) {
-            if !check_stats(stat_range, stat_option) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    true
-}
-
-fn filter_names(item: &MinimizedWeapon, search: &str) -> bool {
-    item.name
-        .to_lowercase()
-        .contains(search.to_lowercase().as_str())
-}
-
-fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) -> bool {
-    let hash = &item.hash;
-
-    for (perk_hash, slot) in search {
-        if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
-            if slot != actual_slot
-                && !(slot == &PerkSlot::LeftRight
-                    && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
-            {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-fn filter_weapon_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
-    item.weapon_type == search
-}
-
-fn filter_craftable(item: &MinimizedWeapon, search: bool, craftables: &BungieHashSet) -> bool {
-    craftables.get(&item.hash).is_some() == search
-}
-
-fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
-    item.energy == search
-}
-
-fn filter_rarity(item: &MinimizedWeapon, search: TierType) -> bool {
-    item.rarity == search
-}
-
-fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet) -> bool {
-    adept.get(&item.hash).is_some() == search
-}
-
-fn filter_slot(item: &MinimizedWeapon, search: u32) -> bool {
-    item.slot == search
-}
-
-fn filter_ammo(item: &MinimizedWeapon, search: DestinyAmmunitionType) -> bool {
-    item.ammo_type == search
-}
-
-pub fn check_weapon(
-    item: &MinimizedWeapon,
-    search: &FilterRequest,
-    adept: &BungieHashSet,
-    perks: &GunPerkMap,
-    craftables: &BungieHashSet,
-) -> bool {
-    if let Some(query) = search.ammo {
-        if !filter_ammo(item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = search.energy {
-        if !filter_energy(item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = search.family {
-        if !filter_weapon_type(item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = search.slot {
-        if !filter_slot(item, query.into()) {
-            return false;
-        }
-    }
-    if let Some(query) = search.rarity {
-        if !filter_rarity(item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = search.craftable {
-        if !filter_craftable(item, query, craftables) {
-            return false;
-        }
-    }
-    if let Some(query) = search.adept {
-        if !filter_adept(item, query, adept) {
-            return false;
-        }
-    }
-    if let Some(query) = &search.perks {
-        if !filter_perks(perks, item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = &search.stats {
-        if !filter_stats(item, query) {
-            return false;
-        }
-    }
-    if let Some(query) = &search.name {
-        if !filter_names(item, query.as_str()) {
-            return false;
-        }
-    }
-    true
-}
-
-//SUPER fast.
-//less than 1ms in debug???
 impl Filter {
-    pub fn filter_for_new(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
+    #[inline(always)]
+    pub fn check_weapon(&self, item: &MinimizedWeapon, search: &FilterRequest) -> bool {
+        if let Some(query) = search.ammo {
+            if !filter_ammo(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = search.energy {
+            if !filter_energy(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = search.family {
+            if !filter_weapon_type(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = search.slot {
+            if !filter_slot(item, query.into()) {
+                return false;
+            }
+        }
+        if let Some(query) = search.rarity {
+            if !filter_rarity(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = search.craftable {
+            if !filter_craftable(item, query, &self.craftable) {
+                return false;
+            }
+        }
+        if let Some(query) = search.adept {
+            if !filter_adept(item, query, &self.adept) {
+                return false;
+            }
+        }
+        if let Some(query) = &search.perks {
+            if !filter_perks(&self.perks, item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = &search.stats {
+            if !filter_stats(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = &search.name {
+            if !filter_names(item, query) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl Filter {
+    #[inline(always)]
+    pub fn filter_for(&self, search: FilterRequest) -> Vec<MinimizedWeapon> {
         let mut result: Vec<MinimizedWeapon> = Vec::new();
         for item in &self.weapons {
-            if check_weapon(item, &search, &self.adept, &self.perks, &self.craftable) {
+            if self.check_weapon(item, &search) {
                 result.push(item.to_owned());
             }
         }
         result.shrink_to_fit();
         result
-    }
-}
-
-//18 miliseconds in debug
-impl Filter {
-    pub fn filter_for(
-        &self,
-        search: FilterRequest,
-    ) -> Result<Vec<MinimizedWeapon>, Box<dyn std::error::Error>> {
-        let mut buffer = self.weapons.clone();
-        if let Some(query) = search.ammo {
-            //buffer = filter_ammo(buffer, query).await;
-            buffer.retain(|item| filter_ammo(item, query));
-        }
-        if let Some(query) = search.family {
-            //buffer = filter_weapon_type(buffer, query).await?;
-            buffer.retain(|item| filter_weapon_type(item, query))
-        }
-        if let Some(query) = search.perks {
-            //buffer = filter_perks(self.perks.clone(), buffer, query).await?;
-            buffer.retain(|item| filter_perks(&self.perks, item, &query));
-        }
-        if let Some(query) = search.slot {
-            //buffer = filter_slot(buffer, query).await?;
-            let query = query as u32;
-            buffer.retain(|item| filter_slot(item, query))
-        }
-        if let Some(query) = search.energy {
-            //buffer = filter_energy(buffer, query).await?;
-            buffer.retain(|item| filter_energy(item, query));
-        }
-        if let Some(query) = search.rarity {
-            //buffer = filter_rarity(buffer, query).await?;
-            buffer.retain(|item| filter_rarity(item, query));
-        }
-        if let Some(query) = search.adept {
-            //buffer = filter_adept(buffer, query, self.adept.clone()).await?;
-            buffer.retain(|item| filter_adept(item, query, &self.adept));
-        }
-        if let Some(query) = search.craftable {
-            //buffer = filter_craftable(buffer, query).await?;
-            buffer.retain(|item| filter_craftable(item, query, &self.craftable));
-        }
-        if let Some(query) = search.stats {
-            //buffer = filter_stats(buffer, query).await?;
-            buffer.retain(|item| filter_stats(item, &query));
-        }
-        if let Some(query) = search.name {
-            //buffer = filter_names(buffer, query).await?;
-            buffer.retain(|item| filter_names(item, query.as_str()));
-        }
-
-        Ok(buffer)
     }
 }
 
@@ -521,7 +180,6 @@ mod tests {
     use rustgie_types::destiny::*;
 
     use crate::{BungieHash, FilterRequest, StatFilter, StatHashes};
-    use std::collections::HashMap;
 
     #[test]
     fn test() {
@@ -532,7 +190,7 @@ mod tests {
         filter_params.slot = Some(crate::WeaponSlot::Top);
         filter_params.energy = Some(DamageType::Strand);
         let start = std::time::Instant::now();
-        let result = weapon_filter.filter_for(filter_params).unwrap();
+        let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
         println!("{}", duration.as_millis());
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
@@ -547,14 +205,14 @@ mod tests {
         //let mut perks: PerkMap = std::collections::HashMap::new();
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
-        let mut stats: HashMap<BungieHash, StatFilter> = HashMap::new();
+        let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
-        stats.insert(StatHashes::Velocity.into(), StatFilter::Below(35));
+        stats.push((StatHashes::Velocity.into(), StatFilter::Below(35)));
         //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         filter_params.stats = Some(stats);
         let start: std::time::Instant = std::time::Instant::now();
         //let result = weapon_filter.filter_for(filter_params).unwrap();
-        let result = weapon_filter.filter_for_new(filter_params);
+        let result = weapon_filter.filter_for(filter_params);
         let duration = start.elapsed();
         //println!("{:?}", result);
         println!("{} Micro Seconds", duration.as_micros());
