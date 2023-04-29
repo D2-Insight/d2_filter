@@ -1,6 +1,11 @@
-use num_enum::IntoPrimitive;
+mod enums;
+mod filters;
+
+use crate::filters::*;
+
+use enums::*;
 use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
-use serde_repr::Deserialize_repr;
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 
@@ -13,17 +18,6 @@ pub type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
 type GunPerkMap = HashMap<PerkHash, PerkMap>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize_repr)]
-#[repr(u8)]
-pub enum PerkSlot {
-    Barrel = 0,
-    Magazine = 1,
-    Left = 2,
-    Right = 3,
-    Origin = 4,
-    Unknown = 5,
-    LeftRight,
-}
 pub struct Filter {
     weapons: Vec<MinimizedWeapon>,
     adept: BungieHashSet,
@@ -67,90 +61,10 @@ impl FilterRequest {
     }
 }
 
-//thanks calc api lol
-#[derive(IntoPrimitive)]
-#[repr(u32)]
-pub enum StatHashes {
-    Accuracy = 1591432999,
-    AimAssist = 1345609583,
-    Airborne = 2714457168,
-    AmmoCapacity = 925767036,
-    Attack = 1480404414,
-    BlastRadius = 3614673599,
-    ChargeRate = 3022301683,
-    ChargeTime = 2961396640,
-    DrawTime = 447667954,
-    GuardEfficiency = 2762071195,
-    GuardEndurance = 3736848092,
-    GuardResistance = 209426660,
-    Handling = 943549884,
-    Impact = 4043523819,
-    InventorySize = 1931675084,
-    Magazine = 3871231066,
-    Range = 1240592695,
-    RecoilDir = 2715839340,
-    Recovery = 1943323491,
-    Reload = 4188031367,
-    Rpm = 4284893193,
-    ShieldDuration = 1842278586,
-    SwingSpeed = 2837207746,
-    Velocity = 2523465841,
-    Zoom = 3555269338,
-    Unkown = 0,
-}
-
-#[derive(Clone, Copy)]
-pub enum StatFilter {
-    Above(i32),
-    Between(i32, i32),
-    Below(i32),
-    AtOrAbove(i32),
-    AtOrBelow(i32),
-    AtOrBetween(i32, i32),
-    At(i32),
-    Minimum,
-    Maximum,
-}
-
-#[derive(Clone, Copy, IntoPrimitive)]
-#[repr(u32)]
-pub enum WeaponSlot {
-    Top = 1498876634,
-    Middle = 2465295065,
-    Bottom = 953998645,
-}
-
-#[repr(u8)]
-enum MiniWeaponSlot {
-    Top = 1,
-    Middle = 2,
-    Bottom = 3,
-}
-
-impl Into<WeaponSlot> for MiniWeaponSlot {
-    fn into(self) -> WeaponSlot {
-        match self {
-            MiniWeaponSlot::Bottom => WeaponSlot::Bottom,
-            MiniWeaponSlot::Middle => WeaponSlot::Middle,
-            MiniWeaponSlot::Top => WeaponSlot::Top,
-        }
-    }
-}
-
-impl Into<MiniWeaponSlot> for WeaponSlot {
-    fn into(self) -> MiniWeaponSlot {
-        match self {
-            WeaponSlot::Bottom => MiniWeaponSlot::Bottom,
-            WeaponSlot::Middle => MiniWeaponSlot::Middle,
-            WeaponSlot::Top => MiniWeaponSlot::Top,
-        }
-    }
-}
-
 //Planning on reducing memory usage by preprocessing manifest into this struct.
 //craftable, adept, and sunset should just be in a seperate hashset to reduce space.
 //I could reduce a lot of these to u8 but keeping it near bungie spec
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct MinimizedWeapon {
     name: String,
     hash: u32,
@@ -187,96 +101,6 @@ impl Default for Filter {
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[inline(always)]
-fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
-    match stat_range {
-        StatFilter::Above(stat_above) => stat_above < check_stat,
-        StatFilter::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
-        StatFilter::Below(stat_below) => stat_below > check_stat,
-        StatFilter::AtOrAbove(stat_above) => stat_above <= check_stat,
-        StatFilter::AtOrBetween(stat_low, stat_high) => {
-            stat_high >= check_stat || stat_low <= check_stat
-        }
-        StatFilter::AtOrBelow(stat_below) => stat_below >= check_stat,
-        StatFilter::At(stat_at) => stat_at == check_stat,
-        _ => true,
-    }
-}
-
-#[inline(always)]
-fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(BungieHash, StatFilter)>) -> bool {
-    let item_stats = &item.stats;
-    for (stat, stat_range) in stats {
-        if let Some(stat_option) = item_stats.get(stat) {
-            if !check_stats(stat_range, stat_option) {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    true
-}
-
-#[inline(always)]
-fn filter_names(item: &MinimizedWeapon, search: &str) -> bool {
-    item.name
-        .to_lowercase()
-        .contains(search.to_lowercase().as_str())
-}
-
-#[inline(always)]
-fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) -> bool {
-    let hash = &item.hash;
-
-    for (perk_hash, slot) in search {
-        if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
-            if !(slot == actual_slot
-                && slot == &PerkSlot::LeftRight
-                && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
-            {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-#[inline(always)]
-fn filter_weapon_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
-    item.weapon_type == search
-}
-
-#[inline(always)]
-fn filter_craftable(item: &MinimizedWeapon, search: bool, craftables: &BungieHashSet) -> bool {
-    craftables.get(&item.hash).is_some() == search
-}
-
-#[inline(always)]
-fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
-    item.energy == search
-}
-
-#[inline(always)]
-fn filter_rarity(item: &MinimizedWeapon, search: TierType) -> bool {
-    item.rarity == search
-}
-
-#[inline(always)]
-fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet) -> bool {
-    adept.get(&item.hash).is_some() == search
-}
-
-#[inline(always)]
-fn filter_slot(item: &MinimizedWeapon, search: u32) -> bool {
-    item.slot == search
-}
-
-#[inline(always)]
-fn filter_ammo(item: &MinimizedWeapon, search: DestinyAmmunitionType) -> bool {
-    item.ammo_type == search
 }
 
 impl Filter {
@@ -328,7 +152,7 @@ impl Filter {
             }
         }
         if let Some(query) = &search.name {
-            if !filter_names(item, query.as_str()) {
+            if !filter_names(item, query) {
                 return false;
             }
         }
