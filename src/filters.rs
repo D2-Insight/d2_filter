@@ -45,8 +45,8 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
     for (perk_hash, slot) in search {
         if let Some(actual_slot) = perks.get(hash).unwrap().get(perk_hash) {
             if !(slot == actual_slot
-                && slot == &PerkSlot::LeftRight
-                && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
+                || slot == &PerkSlot::LeftRight
+                    && matches!(actual_slot, &PerkSlot::Left | &PerkSlot::Right))
             {
                 return false;
             }
