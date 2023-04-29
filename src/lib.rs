@@ -1,5 +1,5 @@
-mod enums;
-mod filters;
+pub mod enums;
+pub mod filters;
 
 use crate::filters::*;
 
