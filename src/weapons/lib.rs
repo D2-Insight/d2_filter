@@ -11,10 +11,10 @@ use crate::{
 use super::{filters::*, structs::MinimizedWeapon};
 
 pub struct WeaponFilter {
-    weapons: Vec<MinimizedWeapon>,
-    adept: BungieHashSet,
-    perks: GunPerkMap,
-    craftable: BungieHashSet,
+    pub weapons: Vec<MinimizedWeapon>,
+    pub adept: BungieHashSet,
+    pub perks: GunPerkMap,
+    pub craftable: BungieHashSet,
 }
 
 pub struct WeaponRequest {
