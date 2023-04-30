@@ -4,13 +4,8 @@ pub mod inventory_items;
 pub mod weapons;
 
 use enums::*;
-use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
-use serde::Deserialize;
+use rustgie_types::destiny::{DestinyAmmunitionType, DestinyItemSubType};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use wasm_bindgen::prelude::*;
-use weapons::structs::MinimizedWeapon;
-
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
@@ -62,8 +57,10 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
+        //filter_params.season = Some(crate::generic::MiniSeason::RedWar);
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
-        filter_params.name = Some("Forerunner".to_string());
+        filter_params.name = Some("Sunshot".to_string());
+        //filter_params
         //filter_params.adept = Some(true);
         //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
         //filter_params.stats = Some(stats);
@@ -74,10 +71,11 @@ mod tests {
         //println!("{:?}", result);
         println!("{} Micro Seconds", duration.as_micros());
         println!("{} Items", result.len());
-        println!(
-            "{}",
-            <MiniIcon as Into<String>>::into(result.get(0).unwrap().icon)
-        )
+        println!("{}", String::from(result.get(0).unwrap().icon));
+        print!(
+            "{}\n",
+            Option::<String>::from(result.get(0).unwrap().season).unwrap()
+        );
 
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
         //assert_eq!(result.get(&3193598749).is_some(), true);
