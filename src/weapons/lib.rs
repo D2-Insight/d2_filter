@@ -4,8 +4,10 @@ use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubTy
 
 use crate::{
     enums::WeaponSlot,
-    generic::MiniSeason,
-    inventory_items::filters::{filter_energy, filter_names, filter_rarity, filter_slot, filter_season},
+    generic::MiniWatermark,
+    inventory_items::filters::{
+        filter_energy, filter_names, filter_rarity, filter_season, filter_slot,
+    },
     BungieHashSet, GunPerkMap, PerkMap, StatVec,
 };
 
@@ -29,7 +31,7 @@ pub struct WeaponRequest {
     pub rarity: Option<TierType>,
     pub ammo: Option<DestinyAmmunitionType>,
     pub perks: Option<PerkMap>,
-    pub season: Option<MiniSeason>,
+    pub season: Option<MiniWatermark>,
 }
 
 impl Default for WeaponRequest {
@@ -87,7 +89,7 @@ impl WeaponFilter {
     #[inline(always)]
     pub fn check_weapon(&self, item: &MinimizedWeapon, search: &WeaponRequest) -> bool {
         if let Some(query) = search.season {
-            if !filter_season(item, query){
+            if !filter_season(item, query) {
                 return false;
             }
         }

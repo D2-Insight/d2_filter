@@ -57,9 +57,9 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
-        //filter_params.season = Some(crate::generic::MiniSeason::RedWar);
+        filter_params.season = Some(crate::generic::MiniWatermark::Unknown);
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
-        filter_params.name = Some("Sunshot".to_string());
+        //filter_params.name = Some("Sunshot".to_string());
         //filter_params
         //filter_params.adept = Some(true);
         //filter_params.ammo = Some(DestinyAmmunitionType::Heavy);
@@ -71,11 +71,14 @@ mod tests {
         //println!("{:?}", result);
         println!("{} Micro Seconds", duration.as_micros());
         println!("{} Items", result.len());
-        println!("{}", String::from(result.get(0).unwrap().icon));
-        print!(
+        //println!("{}", String::from(result.get(0).unwrap().icon));
+        /*print!(
             "{}\n",
             Option::<String>::from(result.get(0).unwrap().season).unwrap()
-        );
+        );*/
+        for items in result {
+            println!("{}", items.name);
+        }
 
         //println!("{:?}", weapon_filter.perks.get(&3193598749).unwrap());
         //assert_eq!(result.get(&3193598749).is_some(), true);

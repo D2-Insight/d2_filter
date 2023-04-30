@@ -1,6 +1,6 @@
 use rustgie_types::destiny::{DamageType, TierType};
 
-use crate::{generic::MiniSeason, weapons::structs::MinimizedWeapon};
+use crate::{generic::MiniWatermark, weapons::structs::MinimizedWeapon};
 
 #[inline(always)]
 pub fn filter_names(item: &crate::weapons::structs::MinimizedWeapon, search: &String) -> bool {
@@ -25,7 +25,6 @@ pub fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
 }
 
 #[inline(always)]
-pub fn filter_season(item: &MinimizedWeapon, search: MiniSeason) -> bool {
+pub fn filter_season(item: &MinimizedWeapon, search: MiniWatermark) -> bool {
     item.season == search
 }
-

@@ -4,7 +4,7 @@ use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubTy
 use serde::Deserialize;
 
 use crate::{
-    generic::{MiniIcon, MiniSeason},
+    generic::{MiniIcon, MiniWatermark},
     BungieHash,
 };
 
@@ -22,5 +22,5 @@ pub struct MinimizedWeapon {
     pub weapon_type: DestinyItemSubType,
     pub stats: HashMap<BungieHash, i32>,
     pub icon: MiniIcon,
-    pub season: MiniSeason,
+    pub season: MiniWatermark,
 }
