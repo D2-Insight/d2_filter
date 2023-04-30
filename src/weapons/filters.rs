@@ -1,4 +1,5 @@
 use crate::enums::*;
+use crate::weapons::structs::MinimizedWeapon;
 use crate::*;
 #[inline(always)]
 fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
@@ -32,13 +33,6 @@ pub fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(BungieHash, StatFilter)
 }
 
 #[inline(always)]
-pub fn filter_names(item: &MinimizedWeapon, search: &String) -> bool {
-    item.name
-        .to_lowercase()
-        .contains(search.to_lowercase().as_str())
-}
-
-#[inline(always)]
 pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap) -> bool {
     let hash = &item.hash;
 
@@ -60,7 +54,7 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
 }
 
 #[inline(always)]
-pub fn filter_weapon_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
+pub fn filter_item_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
     item.weapon_type == search
 }
 
@@ -70,23 +64,8 @@ pub fn filter_craftable(item: &MinimizedWeapon, search: bool, craftables: &Bungi
 }
 
 #[inline(always)]
-pub fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
-    item.energy == search
-}
-
-#[inline(always)]
-pub fn filter_rarity(item: &MinimizedWeapon, search: TierType) -> bool {
-    item.rarity == search
-}
-
-#[inline(always)]
 pub fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet) -> bool {
     adept.get(&item.hash).is_some() == search
-}
-
-#[inline(always)]
-pub fn filter_slot(item: &MinimizedWeapon, search: u32) -> bool {
-    item.slot == search
 }
 
 #[inline(always)]

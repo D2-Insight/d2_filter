@@ -124,7 +124,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "d2statfind"
+name = "d2_filter"
 version = "0.1.0"
 dependencies = [
  "chrono",
