@@ -1,12 +1,8 @@
 use std::collections::HashMap;
 
+use d2_minify::{foundry::MiniFoundry, icons::MiniIcon, stats::MiniStat, watermark::MiniWatermark};
 use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
 use serde::Deserialize;
-
-use crate::{
-    generic::{MiniIcon, MiniWatermark},
-    BungieHash,
-};
 
 //Planning on reducing memory usage by preprocessing manifest into this struct.
 //craftable, adept, and sunset should just be in a seperate hashset to reduce space.
@@ -15,12 +11,13 @@ use crate::{
 pub struct MinimizedWeapon {
     pub name: String,
     pub hash: u32,
-    pub slot: u32,
-    pub energy: DamageType,
-    pub rarity: TierType,
-    pub ammo_type: DestinyAmmunitionType,
-    pub weapon_type: DestinyItemSubType,
-    pub stats: HashMap<BungieHash, i32>,
+    pub slot: u8,
+    pub energy: u8,
+    pub rarity: u8,
+    pub ammo_type: u8,
+    pub weapon_type: u8,
+    pub stats: HashMap<MiniStat, i8>,
     pub icon: MiniIcon,
     pub season: MiniWatermark,
+    pub foundry: MiniFoundry,
 }

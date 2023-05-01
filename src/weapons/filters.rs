@@ -1,8 +1,10 @@
+use d2_minify::stats::MiniStat;
+
 use crate::enums::*;
 use crate::weapons::structs::MinimizedWeapon;
 use crate::*;
 #[inline(always)]
-fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
+fn check_stats(stat_range: &StatFilter, check_stat: &i8) -> bool {
     match stat_range {
         StatFilter::Above(stat_above) => stat_above < check_stat,
         StatFilter::Between(stat_low, stat_high) => stat_high > check_stat || stat_low < check_stat,
@@ -18,7 +20,7 @@ fn check_stats(stat_range: &StatFilter, check_stat: &i32) -> bool {
 }
 
 #[inline(always)]
-pub fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(BungieHash, StatFilter)>) -> bool {
+pub fn filter_stats(item: &MinimizedWeapon, stats: &Vec<(MiniStat, StatFilter)>) -> bool {
     let item_stats = &item.stats;
     for (stat, stat_range) in stats {
         if !item_stats
@@ -55,7 +57,7 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
 
 #[inline(always)]
 pub fn filter_item_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
-    item.weapon_type == search
+    item.weapon_type == search as u8
 }
 
 #[inline(always)]
@@ -70,5 +72,5 @@ pub fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet)
 
 #[inline(always)]
 pub fn filter_ammo(item: &MinimizedWeapon, search: DestinyAmmunitionType) -> bool {
-    item.ammo_type == search
+    item.ammo_type == search as u8
 }

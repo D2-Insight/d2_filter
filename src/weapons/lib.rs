@@ -4,12 +4,12 @@ use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubTy
 
 use crate::{
     enums::WeaponSlot,
-    generic::MiniWatermark,
     inventory_items::filters::{
         filter_energy, filter_names, filter_rarity, filter_season, filter_slot,
     },
     BungieHashSet, GunPerkMap, PerkMap, StatVec,
 };
+use d2_minify::watermark::MiniWatermark;
 
 use super::{filters::*, structs::MinimizedWeapon};
 

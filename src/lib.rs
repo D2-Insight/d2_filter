@@ -1,15 +1,15 @@
 pub mod enums;
-mod generic;
 pub mod inventory_items;
 pub mod weapons;
 
+use d2_minify::stats::MiniStat;
 use enums::*;
 use rustgie_types::destiny::{DestinyAmmunitionType, DestinyItemSubType};
 use std::collections::{HashMap, HashSet};
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
 pub type PerkHash = u32;
-type StatVec = Vec<(BungieHash, StatFilter)>;
+type StatVec = Vec<(MiniStat, StatFilter)>;
 type BungieHashSet = HashSet<BungieHash>;
 pub type PerkMap = HashMap<WeaponHash, PerkSlot>;
 /// K: PerkHash V: Guns that use it
@@ -21,10 +21,10 @@ mod tests {
     use rustgie_types::destiny::*;
 
     use crate::{
-        generic::MiniIcon,
         weapons::lib::{WeaponFilter, WeaponRequest},
         BungieHash, StatFilter, StatHashes,
     };
+    use d2_minify::watermark::MiniWatermark;
 
     #[test]
     fn test() {
@@ -57,7 +57,7 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
-        filter_params.season = Some(crate::generic::MiniWatermark::Unknown);
+        filter_params.season = Some(MiniWatermark::Unknown);
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
         //filter_params.name = Some("Sunshot".to_string());
         //filter_params

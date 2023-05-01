@@ -1,6 +1,7 @@
 use rustgie_types::destiny::{DamageType, TierType};
 
-use crate::{generic::MiniWatermark, weapons::structs::MinimizedWeapon};
+use crate::weapons::structs::MinimizedWeapon;
+use d2_minify::watermark::MiniWatermark;
 
 #[inline(always)]
 pub fn filter_names(item: &crate::weapons::structs::MinimizedWeapon, search: &String) -> bool {
@@ -11,17 +12,17 @@ pub fn filter_names(item: &crate::weapons::structs::MinimizedWeapon, search: &St
 
 #[inline(always)]
 pub fn filter_rarity(item: &MinimizedWeapon, search: TierType) -> bool {
-    item.rarity == search
+    item.rarity == search as u8
 }
 
 #[inline(always)]
 pub fn filter_slot(item: &MinimizedWeapon, search: u32) -> bool {
-    item.slot == search
+    item.slot == search as u8
 }
 
 #[inline(always)]
 pub fn filter_energy(item: &MinimizedWeapon, search: DamageType) -> bool {
-    item.energy == search
+    item.energy == search as u8
 }
 
 #[inline(always)]

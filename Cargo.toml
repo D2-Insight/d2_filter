@@ -12,6 +12,7 @@ serde_cbor = "0.11.2"
 rustgie_types = { git = "https://github.com/ashakoor/rustgie.git", default-features = false }
 serde_repr = "0.1.12"
 wasm-bindgen = { version = "0.2.84", features = ["serde_json", "serde", "serde-serialize"] }
+d2_minify = {git = "https://github.com/D2-Insight/d2_minify.git"}
 
 [dev-dependencies]
 chrono = "0.4.24"
