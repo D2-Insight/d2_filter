@@ -47,13 +47,13 @@ pub enum StatHashes {
 
 #[derive(Clone, Copy)]
 pub enum StatFilter {
-    Above(i32),
-    Between(i32, i32),
-    Below(i32),
-    AtOrAbove(i32),
-    AtOrBelow(i32),
-    AtOrBetween(i32, i32),
-    At(i32),
+    Above(i8),
+    Between(i8, i8),
+    Below(i8),
+    AtOrAbove(i8),
+    AtOrBelow(i8),
+    AtOrBetween(i8, i8),
+    At(i8),
     Minimum,
     Maximum,
 }
