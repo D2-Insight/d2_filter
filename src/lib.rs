@@ -53,7 +53,7 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
-        filter_params.foundry = Some(d2_minify::foundry::MiniFoundry::Unknown);
+        filter_params.foundry = Some(d2_minify::foundry::MiniFoundry::Daito);
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
         //filter_params.name = Some("Sunshot".to_string());
         //filter_params
