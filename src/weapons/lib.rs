@@ -1,7 +1,5 @@
 use std::{collections::HashSet, fs::File};
 
-use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
-
 use crate::{
     enums::WeaponSlot,
     inventory_items::filters::{
@@ -9,7 +7,7 @@ use crate::{
     },
     BungieHashSet, GunPerkMap, PerkMap, StatVec,
 };
-use d2_minify::watermark::MiniWatermark;
+use d2_minify::{foundry::MiniFoundry, watermark::MiniWatermark};
 
 use super::{filters::*, structs::MinimizedWeapon};
 
@@ -21,17 +19,18 @@ pub struct WeaponFilter {
 }
 
 pub struct WeaponRequest {
-    pub family: Option<DestinyItemSubType>,
+    pub family: Option<u32>,
     pub stats: Option<StatVec>,
-    pub energy: Option<DamageType>,
+    pub energy: Option<u32>,
     pub slot: Option<WeaponSlot>,
     pub adept: Option<bool>,
     pub craftable: Option<bool>,
     pub name: Option<String>,
-    pub rarity: Option<TierType>,
-    pub ammo: Option<DestinyAmmunitionType>,
+    pub rarity: Option<u32>,
+    pub ammo: Option<u32>,
     pub perks: Option<PerkMap>,
     pub season: Option<MiniWatermark>,
+    pub foundry: Option<MiniFoundry>,
 }
 
 impl Default for WeaponRequest {
@@ -54,6 +53,7 @@ impl WeaponRequest {
             ammo: None,
             perks: None,
             season: None,
+            foundry: None,
         }
     }
 }
@@ -90,6 +90,11 @@ impl WeaponFilter {
     pub fn check_weapon(&self, item: &MinimizedWeapon, search: &WeaponRequest) -> bool {
         if let Some(query) = search.season {
             if !filter_season(item, query) {
+                return false;
+            }
+        }
+        if let Some(query) = search.foundry {
+            if !filter_foundry(item, query) {
                 return false;
             }
         }

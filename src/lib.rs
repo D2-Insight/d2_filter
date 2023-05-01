@@ -4,7 +4,6 @@ pub mod weapons;
 
 use d2_minify::stats::MiniStat;
 use enums::*;
-use rustgie_types::destiny::{DestinyAmmunitionType, DestinyItemSubType};
 use std::collections::{HashMap, HashSet};
 pub type BungieHash = u32;
 pub type WeaponHash = u32;
@@ -18,13 +17,10 @@ type GunPerkMap = HashMap<PerkHash, PerkMap>;
 #[cfg(test)]
 mod tests {
 
-    use rustgie_types::destiny::*;
-
     use crate::{
         weapons::lib::{WeaponFilter, WeaponRequest},
-        BungieHash, StatFilter, StatHashes,
+        BungieHash, StatFilter,
     };
-    use d2_minify::watermark::MiniWatermark;
 
     #[test]
     fn test() {
@@ -34,7 +30,7 @@ mod tests {
         //filter_params.family = Some(DestinyItemSubType::SubmachineGun);
         //filter_params.slot = Some(crate::WeaponSlot::Top);
         //filter_params.energy = Some(DamageType::Strand);
-        filter_params.ammo = Some(DestinyAmmunitionType::Primary);
+        filter_params.ammo = Some(1);
         //let mut perks: std::collections::HashMap<u32, crate::PerkSlot> =
         //    std::collections::HashMap::new();
         //perks.insert(365154968, crate::PerkSlot::LeftRight);
@@ -57,7 +53,7 @@ mod tests {
         //perks.insert(3619207468, PerkSlot::LeftRight);
         //filter_params.perks = Some(perks);
         let mut stats: Vec<(BungieHash, StatFilter)> = Vec::new();
-        filter_params.season = Some(MiniWatermark::Unknown);
+        filter_params.foundry = Some(d2_minify::foundry::MiniFoundry::Unknown);
         //filter_params.family = Some(DestinyItemSubType::RocketLauncher);
         //filter_params.name = Some("Sunshot".to_string());
         //filter_params

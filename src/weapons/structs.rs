@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use d2_minify::{foundry::MiniFoundry, icons::MiniIcon, stats::MiniStat, watermark::MiniWatermark};
-use rustgie_types::destiny::{DamageType, DestinyAmmunitionType, DestinyItemSubType, TierType};
 use serde::Deserialize;
 
 //Planning on reducing memory usage by preprocessing manifest into this struct.

@@ -1,3 +1,4 @@
+use d2_minify::foundry::MiniFoundry;
 use d2_minify::stats::MiniStat;
 
 use crate::enums::*;
@@ -56,7 +57,7 @@ pub fn filter_perks(perks: &GunPerkMap, item: &MinimizedWeapon, search: &PerkMap
 }
 
 #[inline(always)]
-pub fn filter_item_type(item: &MinimizedWeapon, search: DestinyItemSubType) -> bool {
+pub fn filter_item_type(item: &MinimizedWeapon, search: u32) -> bool {
     item.weapon_type == search as u8
 }
 
@@ -71,6 +72,11 @@ pub fn filter_adept(item: &MinimizedWeapon, search: bool, adept: &BungieHashSet)
 }
 
 #[inline(always)]
-pub fn filter_ammo(item: &MinimizedWeapon, search: DestinyAmmunitionType) -> bool {
+pub fn filter_ammo(item: &MinimizedWeapon, search: u32) -> bool {
     item.ammo_type == search as u8
+}
+
+#[inline(always)]
+pub fn filter_foundry(item: &MinimizedWeapon, search: MiniFoundry) -> bool {
+    item.foundry == search
 }
